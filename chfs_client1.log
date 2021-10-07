@@ -1,0 +1,58 @@
+	im: alloc_inode 1
+FUSE library version: 2.9.9
+unique: 2, opcode: INIT (26), nodeid: 0, insize: 56, pid: 0
+INIT: 7.32
+flags=0x03fffffb
+max_readahead=0x00020000
+   INIT: 7.19
+   flags=0x00000000
+   max_readahead=0x00020000
+   max_write=0x00020000
+   max_background=0
+   congestion_threshold=0
+   unique: 2, success, outsize: 40
+unique: 4, opcode: LOOKUP (1), nodeid: 1, insize: 98, pid: 2586
+   unique: 4, error: -2 (No such file or directory), outsize: 16
+unique: 6, opcode: CREATE (35), nodeid: 1, insize: 114, pid: 2586
+extent_server: getattr 94852543718512
+	im: get_inode 338470000
+	im: inum out of range
+	im: inode not exist
+isfile: 94852543718512 is a dir
+getattr 00005644942ca470 0
+extent_server: getattr 94852543718512
+	im: get_inode 338470000
+	im: inum out of range
+	im: inode not exist
+isfile: 94852543718512 is a dir
+getdir 00005644942ca470
+extent_server: getattr 94852543718512
+	im: get_inode 338470000
+	im: inum out of range
+	im: inode not exist
+   getattr -> 0 0 0
+   unique: 6, success, outsize: 160
+OK: create returns.
+unique: 8, opcode: LOOKUP (1), nodeid: 1, insize: 46, pid: 2588
+   unique: 8, error: -2 (No such file or directory), outsize: 16
+unique: 10, opcode: CREATE (35), nodeid: 1, insize: 62, pid: 2588
+extent_server: getattr 94852543718512
+	im: get_inode 338470000
+	im: inum out of range
+	im: inode not exist
+isfile: 94852543718512 is a dir
+getattr 00005644942ca470 0
+extent_server: getattr 94852543718512
+	im: get_inode 338470000
+	im: inum out of range
+	im: inode not exist
+isfile: 94852543718512 is a dir
+getdir 00005644942ca470
+extent_server: getattr 94852543718512
+	im: get_inode 338470000
+	im: inum out of range
+	im: inode not exist
+   getattr -> 0 0 0
+   unique: 10, success, outsize: 160
+OK: create returns.
+fuse: failed to unmount /home/stu/cse-lab/chfs1: Invalid argument

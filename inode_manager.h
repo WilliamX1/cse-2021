@@ -73,7 +73,7 @@ typedef struct inode {
   unsigned int atime;
   unsigned int mtime;
   unsigned int ctime;
-  blockid_t blocks[NDIRECT+1];   // Data block addresses
+  blockid_t blocks[NDIRECT + 1];   // Data block addresses
 } inode_t;
 
 class inode_manager {
