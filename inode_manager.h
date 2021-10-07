@@ -20,8 +20,8 @@ class disk {
 
  public:
   disk();
-  void read_block(uint32_t id, char *buf);
-  void write_block(uint32_t id, const char *buf);
+  void read_block(uint32_t id, char *buf, int size = BLOCK_SIZE);
+  void write_block(uint32_t id, const char *buf, int size = BLOCK_SIZE);
 };
 
 // block layer -----------------------------------------
@@ -42,8 +42,8 @@ class block_manager {
 
   uint32_t alloc_block();
   void free_block(uint32_t id);
-  void read_block(uint32_t id, char *buf);
-  void write_block(uint32_t id, const char *buf);
+  void read_block(uint32_t id, char *buf, int size = BLOCK_SIZE);
+  void write_block(uint32_t id, const char *buf, int size = BLOCK_SIZE);
 };
 
 // inode layer -----------------------------------------
@@ -79,12 +79,14 @@ typedef struct inode {
 class inode_manager {
  private:
   block_manager *bm;
-  struct inode* get_inode(uint32_t inum);
+  struct inode* get_inode(uint32_t inum, bool is_print = true);
   void put_inode(uint32_t inum, struct inode *ino);
-
+  void _alloc_inode(uint32_t type, int inum);
+  /* 记录分配的 inode */
+  std::map <uint32_t, bool> using_inodes;
  public:
   inode_manager();
-  uint32_t alloc_inode(uint32_t type);
+  uint32_t alloc_inode(uint32_t type, int iinum = -1);
   void free_inode(uint32_t inum);
   void read_file(uint32_t inum, char **buf, int *size);
   void write_file(uint32_t inum, const char *buf, int size);
