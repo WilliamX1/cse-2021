@@ -20,8 +20,9 @@ class disk {
 
  public:
   disk();
-  void read_block(uint32_t id, char *buf, int size = BLOCK_SIZE);
-  void write_block(uint32_t id, const char *buf, int size = BLOCK_SIZE);
+  void read_block(uint32_t id, char *buf);
+  void write_block(uint32_t id, const char *buf);
+  void print_status(uint32_t id);
 };
 
 // block layer -----------------------------------------
@@ -42,8 +43,9 @@ class block_manager {
 
   uint32_t alloc_block();
   void free_block(uint32_t id);
-  void read_block(uint32_t id, char *buf, int size = BLOCK_SIZE);
-  void write_block(uint32_t id, const char *buf, int size = BLOCK_SIZE);
+  void read_block(uint32_t id, char *buf);
+  void write_block(uint32_t id, const char *buf);
+  void print_status();
 };
 
 // inode layer -----------------------------------------
@@ -55,7 +57,7 @@ class block_manager {
 //(BLOCK_SIZE / sizeof(struct inode))
 
 // Block containing inode i
-#define IBLOCK(i, nblocks)     ((nblocks)/BPB + (i)/IPB + 3)
+#define IBLOCK(i, nblocks)     ((nblocks)/BPB + (i)/IPB + 3)//bug?
 
 // Bitmap bits per block
 #define BPB           (BLOCK_SIZE*8)
@@ -67,26 +69,27 @@ class block_manager {
 #define NINDIRECT (BLOCK_SIZE / sizeof(uint))
 #define MAXFILE (NDIRECT + NINDIRECT)
 
+#define FILEBLOCK IBLOCK(INODE_NUM, sb.nblocks) + 1
 typedef struct inode {
   short type;
   unsigned int size;
   unsigned int atime;
   unsigned int mtime;
   unsigned int ctime;
-  blockid_t blocks[NDIRECT + 1];   // Data block addresses
+  blockid_t blocks[NDIRECT+1];   // Data block addresses
 } inode_t;
 
 class inode_manager {
  private:
   block_manager *bm;
-  struct inode* get_inode(uint32_t inum, bool is_print = true);
+  struct inode* get_inode(uint32_t inum);
   void put_inode(uint32_t inum, struct inode *ino);
-  void _alloc_inode(uint32_t type, int inum);
-  /* 记录分配的 inode */
-  std::map <uint32_t, bool> using_inodes;
+  blockid_t get_nth_blockid(inode_t *ino, uint32_t n);
+  void alloc_nth_block(inode_t *ino, uint32_t n);
+
  public:
   inode_manager();
-  uint32_t alloc_inode(uint32_t type, int iinum = -1);
+  uint32_t alloc_inode(uint32_t type);
   void free_inode(uint32_t inum);
   void read_file(uint32_t inum, char **buf, int *size);
   void write_file(uint32_t inum, const char *buf, int size);
@@ -95,4 +98,3 @@ class inode_manager {
 };
 
 #endif
-
