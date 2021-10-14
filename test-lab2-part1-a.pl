@@ -5,7 +5,7 @@
 use strict;
 
 if($#ARGV != 0){
-    print STDERR "Usage: test-lab1-part2-a.pl directory\n";
+    print STDERR "Usage: test-lab2-part1-a.pl directory\n";
     exit(1);
 }
 my $dir = $ARGV[0];
@@ -48,7 +48,7 @@ sub createone {
     my $contents = rand();
     print "create $name\n";
     if(!open(F, ">$dir/$name")){
-        print STDERR "test-lab1-part2-a: cannot create $dir/$name : $!\n";
+        print STDERR "test-lab2-part1-a: cannot create $dir/$name : $!\n";
         exit(1);
     }
     close(F);
@@ -62,7 +62,7 @@ sub createagain {
     my $k = $a[$i];
     print "re-create $k\n";
     if(!open(F, ">$dir/$k")){
-        print STDERR "test-lab1-part2-a: cannot re-create $dir/$k : $!\n";
+        print STDERR "test-lab2-part1-a: cannot re-create $dir/$k : $!\n";
         exit(1);
     }
     close(F);
@@ -85,18 +85,18 @@ sub dircheck {
 
     foreach $f (keys(%$files)){
         if(!defined($h{$f})){
-            print STDERR "test-lab1-part2-a.pl: $f is not in the directory listing\n";
+            print STDERR "test-lab2-part1-a.pl: $f is not in the directory listing\n";
             exit(1);
         }
         if($h{$f} > 1){
-            print STDERR "test-lab1-part2-a.pl: $f appears more than once in the directory\n";
+            print STDERR "test-lab2-part1-a.pl: $f appears more than once in the directory\n";
             exit(1);
         }
     }
 
     foreach $f (@dead){
         if(defined($h{$f})){
-            print STDERR "test-lab1-part2-a.pl: $f is dead but in directory listing\n";
+            print STDERR "test-lab2-part1-a.pl: $f is dead but in directory listing\n";
             exit(1);
         }
     }
@@ -109,16 +109,16 @@ sub livecheck {
     my $k = $a[$i];
     print "livecheck $k\n";
     if(!open(F, "$dir/$k")){
-        print STDERR "test-lab1-part2-a: cannot open $dir/$k : $!\n";
+        print STDERR "test-lab2-part1-a: cannot open $dir/$k : $!\n";
         exit(1);
     }
     close(F);
     if( ! -f "$dir/$k" ){
-	print STDERR "test-lab1-part2-a: $dir/$k is not of type file\n";
+	print STDERR "test-lab2-part1-a: $dir/$k is not of type file\n";
 	exit(1);
     }
     if(open(F, ">$dir/$k/xx")){
-	print STDERR "test-lab1-part2-a: $dir/$k acts like a directory, not a file\n";
+	print STDERR "test-lab2-part1-a: $dir/$k acts like a directory, not a file\n";
         exit(1);
     }
 }
@@ -128,7 +128,7 @@ sub deadcheck {
     $seq = $seq + 1;
     print "check-not-there $name\n";
     if(open(F, "$dir/$name")){
-        print STDERR "test-lab1-part2-a: $dir/$name exists but should not\n";
+        print STDERR "test-lab2-part1-a: $dir/$name exists but should not\n";
         exit(1);
     }
 }
@@ -140,7 +140,7 @@ sub deleteone {
     my $k = $a[$i];
     print "delete $k\n";
     if(unlink($dir . "/" . $k) == 0){
-        print STDERR "test-lab1-part2-a: unlink $k failed: $!\n";
+        print STDERR "test-lab2-part1-a: unlink $k failed: $!\n";
         exit(1);
     }
     delete $files->{$k};

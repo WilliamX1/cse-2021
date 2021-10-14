@@ -33,7 +33,7 @@ int id() {
 // fuse functions (such as lookup) need to return attributes
 // as well as other information, so getattr() gets called a lot.
 //
-// ChFS fakes most of the attributes. It does provide more or
+// CHFS fakes most of the attributes. It does provide more or
 // less correct values for the access/modify/change times
 // (atime, mtime, and ctime), and correct values for file sizes.
 //
@@ -86,7 +86,7 @@ getattr(chfs_client::inum inum, struct stat &st)
 // 
 // The @ino argument indicates the file or directory FUSE wants
 // you to operate on. It's a 32-bit FUSE identifier; just assign
-// it to a chfs_client::inum to get a 64-bit ChFS inum.
+// it to a chfs_client::inum to get a 64-bit CHFS inum.
 //
 void
 fuseserver_getattr(fuse_req_t req, fuse_ino_t ino,
@@ -440,24 +440,25 @@ main(int argc, char *argv[])
 
     setvbuf(stdout, NULL, _IONBF, 0);
 
-#if 0
-    if(argc != 4){
-        fprintf(stderr, "Usage: chfs_client <mountpoint> <port-extent-server> <port-lock-server>\n");
+#if 1
+    if(argc != 3){
+        fprintf(stderr, "Usage: chfs_client <mountpoint> <port-extent-server>\n");
         exit(1);
     }
-#endif
+#else
     if(argc != 2){
         fprintf(stderr, "Usage: chfs_client <mountpoint>\n");
         exit(1);
     }
+#endif
     mountpoint = argv[1];
 
     srandom(getpid());
 
     myid = random();
 
-    // chfs = new chfs_client(argv[2], argv[3]);
-    chfs = new chfs_client();
+    chfs = new chfs_client(argv[2]);
+    // chfs = new chfs_client();
 
     fuseserver_oper.getattr    = fuseserver_getattr;
     fuseserver_oper.statfs     = fuseserver_statfs;

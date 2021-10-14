@@ -24,7 +24,7 @@ use strict;
 $| = 1;
 
 if($#ARGV != 0){
-    print STDERR "Usage: test-lab1-part2-b.pl directory1\n";
+    print STDERR "Usage: test-lab2-part1-b.pl directory1\n";
     exit(1);
 }
 my $dir1 = $ARGV[0];

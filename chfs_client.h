@@ -36,8 +36,7 @@ class chfs_client {
   static inum n2i(std::string);
 
  public:
-  chfs_client();
-  chfs_client(std::string, std::string);
+  chfs_client(std::string);
 
   bool isfile(inum);
   bool isdir(inum);

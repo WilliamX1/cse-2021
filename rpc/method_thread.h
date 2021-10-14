@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include "lang/verify.h"
 
+__attribute__ ((unused))
 static pthread_t
 method_thread_parent(void *(*fn)(void *), void *arg, bool detach)
 {

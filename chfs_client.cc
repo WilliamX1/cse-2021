@@ -1,4 +1,4 @@
-// chfs client.  implements FS operations using extent and lock server
+// chfs client.  implements FS operations using extent server
 #include "chfs_client.h"
 #include "extent_client.h"
 #include <sstream>
@@ -9,15 +9,9 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-chfs_client::chfs_client()
+chfs_client::chfs_client(std::string extent_dst)
 {
-    ec = new extent_client();
-
-}
-
-chfs_client::chfs_client(std::string extent_dst, std::string lock_dst)
-{
-    ec = new extent_client();
+    ec = new extent_client(extent_dst);
     if (ec->put(1, "") != extent_protocol::OK)
         printf("error init root dir\n"); // XYB: init root dir
 }

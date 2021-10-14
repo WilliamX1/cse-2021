@@ -17,12 +17,12 @@ DIR=$1
 for times in {0..3}
 do
     echo "test Round:"$times""
-    if ( ! ( perl test-lab1-part2-b.pl $1 | grep -q -i "Passed all tests" ));
+    if ( ! ( perl test-lab2-part1-b.pl $1 | grep -q -i "Passed all tests" ));
     then
         echo "failed test B chfs1"
         exit
     fi
-    if ( ! ( perl test-lab1-part2-a.pl $1 | grep -q -i "Passed all tests" ));
+    if ( ! ( perl test-lab2-part1-a.pl $1 | grep -q -i "Passed all tests" ));
     then
         echo "failed test A chfs1"
         exit
@@ -31,7 +31,7 @@ do
     #ok this section is maybe a bit cruel here... I'll comment it out
     #
     #----------------------------------------------------------------------
-    #if ( ! ( bash test-lab1-part2-e.sh $1 | grep -q -i "Passed BLOB test" ));
+    #if ( ! ( bash test-lab2-part1-e.sh $1 | grep -q -i "Passed BLOB test" ));
     #then
     #    echo "failed test E chfs1"
     #    exit
