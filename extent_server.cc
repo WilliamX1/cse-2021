@@ -42,7 +42,6 @@ int extent_server::get(extent_protocol::extentid_t id, std::string &buf)
 
   int size = 0;
   char *cbuf = NULL;
-
   im->read_file(id, &cbuf, &size);
   if (size == 0)
     buf = "";
