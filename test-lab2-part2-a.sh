@@ -15,7 +15,8 @@ sort $DIR/mr-out-0 > $DIR/mr-wc
 rm -f $DIR/mr-out*
 
 # compare with the correct output
-if cmp $DIR/mr-wc ./novels/mr-wc-correct
+sort ./novels/mr-wc-correct > ./novels/lcoal-mr-wc-correct # in case of WSL
+if cmp $DIR/mr-wc ./novels/lcoal-mr-wc-correct
 then
 	echo "Passed mr-wc test."
 else
