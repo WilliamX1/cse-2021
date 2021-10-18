@@ -33,6 +33,9 @@ wait $pid
 # and not before, that means the job has finished.
 sort mr-out* | grep . > mr-wc-all
 sort ../novels/mr-wc-correct > ../novels/lcoal-mr-wc-correct # in case of WSL
+which tofrodos >> /dev/null || sudo apt-get install tofrodos # in case of UNIX/DOS encoding
+find ../novels -type f -exec fromdos {} \;
+
 if cmp mr-wc-all ../novels/lcoal-mr-wc-correct
 then
 	echo "Passed mr-wc-distributed test."
