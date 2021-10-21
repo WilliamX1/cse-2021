@@ -8,6 +8,7 @@
 #include <iostream>
 #include <vector>
 #include <algorithm>
+#include <string.h>
 
 using namespace std;
 
@@ -24,11 +25,54 @@ KeyVal;
 // and look only at the contents argument. The return value is a slice
 // of key/value pairs.
 //
+bool isLowerLetter(char ch) { /* 判断是否是小写英文字母 */
+    return 'a' <= ch && ch <= 'z';
+};
+bool isUpperLetter(char ch) { /* 判断是否是大写英文字母 */
+    return 'A' <= ch && ch <= 'Z';
+};
+bool isEngAlpha(char ch) { /* 判断是否是英文字母 */
+    return isLowerLetter(ch) || isUpperLetter(ch);
+};
+
+bool judgeStr(string& str) { /* 判断是否合法 */
+    if (str == "") return false;
+    int size = str.size();
+    for (int i = 0; i < size; i++)
+        if (!isEngAlpha(str[i])) return false;
+    return true;
+};
+string strPlus(string str1, string str2) {
+    return to_string(stol(str1) + stol(str2));
+};
+
 vector<KeyVal> Map(const string &filename, const string &content)
 {
     // Your code goes here
     // Hints: split contents into an array of words.
-
+    vector<KeyVal> ret;
+    int l = 0, r = 0; /* 下标 */
+    while (content[r] != '\0') {
+        if (isEngAlpha(content[r])) r++;
+        else {
+            string str = r > l ? content.substr(l, r - l) : "";
+            if (judgeStr(str)) {
+                KeyVal kv;
+                kv.key = str; kv.val = "1";
+                ret.push_back(kv);
+            };
+            while (content[r] != '\0' && !isEngAlpha(content[r])) r++;
+            l = r;
+        };
+    };
+    /* 最后一个字符串 */
+    string str = r > l ? content.substr(l, r - l) : "";
+    if (judgeStr(str)) {
+        KeyVal kv;
+        kv.key = str; kv.val = "1";
+        ret.push_back(kv);
+    };
+    return ret;
 }
 
 //
@@ -40,7 +84,13 @@ string Reduce(const string &key, const vector <string> &values)
 {
     // Your code goes here
     // Hints: return the number of occurrences of the word.
-
+    string ret = "0";
+    int size = values.size();
+    for (int i = 0; i < size; i++)
+        if (key.compare(values[i])) {
+            ret = strPlus(ret, values[i]);
+        }; /* 相等时 compare 返回值为0 */
+    return ret;
 }
 
 int main(int argc, char ** argv)
@@ -49,41 +99,40 @@ int main(int argc, char ** argv)
         cout << "Usage: mrsequential inputfiles...\n";
         exit(1);
     }
-
     vector <string> filename;
     vector <KeyVal> intermediate;
 
-    //
+    
     // read each input file,
     // pass it to Map,
     // accumulate the intermediate Map output.
-    //
-
+    
     for (int i = 1; i < argc; ++i) {
 
         string filename = argv[i];
         string content;
-
         // Read the whole file into the buffer.
+        // printf("Read the whole file into the buffer.\n");
+        // printf("%s\n", content.c_str());
         getline(ifstream(filename), content, '\0');
-
+        // printf("Finish Read the whole file into the buffer.\n");
         vector <KeyVal> KVA = Map(filename, content);
-
+        
         intermediate.insert(intermediate.end(), KVA.begin(), KVA.end());
+    };
 
-    }
-
-    //
+    
     // a big difference from real MapReduce is that all the
     // intermediate data is in one place, intermediate[],
     // rather than being partitioned into NxM buckets.
-    //
+    
 
     sort(intermediate.begin(), intermediate.end(),
     	[](KeyVal const & a, KeyVal const & b) {
-		return a.key < b.key;
+        // int ret = strcasecmp(a.key.c_str(), b.key.c_str());
+        // return ret == 0 ? a.key > b.key : ret < 0;
+        return a.key < b.key;
 	});
-
     //
     // call Reduce on each distinct key in intermediate[],
     // and print the result to mr-out-0.
@@ -98,7 +147,6 @@ int main(int argc, char ** argv)
         for (unsigned int k = i; k < j; k++) {
             values.push_back(intermediate[k].val);
         }
-
         string output = Reduce(intermediate[i].key, values);
         printf("%s %s\n", intermediate[i].key.data(), output.data());
 
