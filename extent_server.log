@@ -1,0 +1,4 @@
+	im: alloc_inode 1
+	im: get_inode 1
+	im: inode not exist
+	im: put_inode 1
