@@ -2,3 +2,5 @@
 	im: get_inode 1
 	im: inode not exist
 	im: put_inode 1
+rpcs::dispatch: failed to unmarshall the arguments. You are probably calling RPC 0x6001 with wrong types of arguments.
+extent_server: rpc/rpc.cc:600: void rpcs::dispatch(rpcs::djob_t*): Assertion `0' failed.
