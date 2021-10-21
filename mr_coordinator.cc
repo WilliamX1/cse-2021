@@ -48,13 +48,49 @@ private:
 
 mr_protocol::status Coordinator::askTask(int, mr_protocol::AskTaskResponse &reply) {
 	// Lab2 : Your code goes here.
+	static int id = 0; id++;
+	reply.id = id;
+	
+	for (int i = 0; i < mapTasks.size(); i++)
+		if (mapTasks[i].isAssigned || mapTasks[i].isCompleted) continue;
+		else {
+			reply.index = mapTasks[i].index;
+			mapTasks[i].isAssigned = true;
+			return mr_protocol::OK;
+		};
+	
+	if (!isFinishedMap()) return mr_protocol::NOENT;
+
+	for (int i = 0; i < reduceTasks.size(); i++)
+		if (reduceTasks[i].isAssigned || reduceTasks[i].isCompleted) continue;
+		else {
+			reply.index = reduceTasks[i].index;
+			reduceTasks[i].isAssigned = true;
+		};
 
 	return mr_protocol::OK;
 }
 
 mr_protocol::status Coordinator::submitTask(int taskType, int index, bool &success) {
 	// Lab2 : Your code goes here.
+	static int id = 0; id++;
 
+	success = false;
+	if (taskType == MAP) {
+		for (int i = 0; i < mapTasks.size(); i++)
+			if (index == mapTasks[i].index) {
+				mapTasks[i].isCompleted = true;
+				success = true;
+				return mr_protocol::OK;
+			};
+	} else if (taskType == REDUCE) {
+		for (int i = 0; i < reduceTasks.size(); i++)
+			if (index == reduceTasks[i].index) {
+				reduceTasks[i].isCompleted = true;
+				success = true;
+				return mr_protocol::OK;
+			}
+	}
 	return mr_protocol::OK;
 }
 
@@ -149,7 +185,8 @@ int main(int argc, char *argv[])
 	// Lab2: Your code here.
 	// Hints: Register "askTask" and "submitTask" as RPC handlers here
 	// 
-
+	server.reg(mr_protocol::asktask, &c, &Coordinator::askTask);
+	server.reg(mr_protocol::submittask, &c, &Coordinator::submitTask);
 	while(!c.Done()) {
 		sleep(1);
 	}

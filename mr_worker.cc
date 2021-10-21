@@ -118,7 +118,20 @@ void Worker::doWork()
 		// if mr_tasktype::REDUCE, then doReduce and doSubmit
 		// if mr_tasktype::NONE, meaning currently no work is needed, then sleep
 		//
-
+		int r;
+		mr_protocol::AskTaskResponse reply;
+		mr_protocol::status ret = this->cl->call(mr_protocol::asktask, r, reply);
+		if (ret == mr_protocol::OK) {
+			if (reply.tasktype == MAP) {
+				vector<string> filenames;
+				doMap(reply.index, filenames);
+				doSubmit(reply.tasktype, reply.index);
+			} else if (reply.tasktype == REDUCE) {
+				doReduce(reply.index);
+			} else if (reply.tasktype == NONE) {
+				sleep(1);
+			}
+		}
 	}
 }
 
