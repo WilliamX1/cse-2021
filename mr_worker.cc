@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <dirent.h>
+#include <string>
 
 #include <mutex>
 #include <string>
@@ -22,6 +23,27 @@ struct KeyVal {
     string val;
 };
 
+bool isLowerLetter(char ch) { /* 判断是否是小写英文字母 */
+    return 'a' <= ch && ch <= 'z';
+};
+bool isUpperLetter(char ch) { /* 判断是否是大写英文字母 */
+    return 'A' <= ch && ch <= 'Z';
+};
+bool isEngAlpha(char ch) { /* 判断是否是英文字母 */
+    return isLowerLetter(ch) || isUpperLetter(ch);
+};
+
+bool judgeStr(string& str) { /* 判断是否合法 */
+    if (str == "") return false;
+    int size = str.size();
+    for (int i = 0; i < size; i++)
+        if (!isEngAlpha(str[i])) return false;
+    return true;
+};
+string strPlus(string str1, string str2) {
+    return to_string(stol(str1) + stol(str2));
+};
+
 //
 // The map function is called once for each file of input. The first
 // argument is the name of the input file, and the second is the
@@ -32,7 +54,31 @@ struct KeyVal {
 vector<KeyVal> Map(const string &filename, const string &content)
 {
 	// Copy your code from mr_sequential.cc here.
-
+	// Your code goes here
+    // Hints: split contents into an array of words.
+    vector<KeyVal> ret;
+    int l = 0, r = 0; /* 下标 */
+    while (content[r] != '\0') {
+        if (isEngAlpha(content[r])) r++;
+        else {
+            string str = r > l ? content.substr(l, r - l) : "";
+            if (judgeStr(str)) {
+                KeyVal kv;
+                kv.key = str; kv.val = "1";
+                ret.push_back(kv);
+            };
+            while (content[r] != '\0' && !isEngAlpha(content[r])) r++;
+            l = r;
+        };
+    };
+    /* 最后一个字符串 */
+    string str = r > l ? content.substr(l, r - l) : "";
+    if (judgeStr(str)) {
+        KeyVal kv;
+        kv.key = str; kv.val = "1";
+        ret.push_back(kv);
+    };
+    return ret;
 }
 
 //
@@ -43,7 +89,15 @@ vector<KeyVal> Map(const string &filename, const string &content)
 string Reduce(const string &key, const vector < string > &values)
 {
     // Copy your code from mr_sequential.cc here.
-
+	// Your code goes here
+    // Hints: return the number of occurrences of the word.
+    string ret = "0";
+    int size = values.size();
+    for (int i = 0; i < size; i++)
+        if (key.compare(values[i])) {
+            ret = strPlus(ret, values[i]);
+        }; /* 相等时 compare 返回值为0 */
+    return ret;
 }
 
 
@@ -88,13 +142,12 @@ Worker::Worker(const string &dst, const string &dir, MAPF mf, REDUCEF rf)
 void Worker::doMap(int index, const vector<string> &filenames)
 {
 	// Lab2: Your code goes here.
-
+	return;
 }
 
 void Worker::doReduce(int index)
 {
 	// Lab2: Your code goes here.
-
 }
 
 void Worker::doSubmit(mr_tasktype taskType, int index)
@@ -118,20 +171,6 @@ void Worker::doWork()
 		// if mr_tasktype::REDUCE, then doReduce and doSubmit
 		// if mr_tasktype::NONE, meaning currently no work is needed, then sleep
 		//
-		int r;
-		mr_protocol::AskTaskResponse reply;
-		mr_protocol::status ret = this->cl->call(mr_protocol::asktask, r, reply);
-		if (ret == mr_protocol::OK) {
-			if (reply.tasktype == MAP) {
-				vector<string> filenames;
-				doMap(reply.index, filenames);
-				doSubmit(reply.tasktype, reply.index);
-			} else if (reply.tasktype == REDUCE) {
-				doReduce(reply.index);
-			} else if (reply.tasktype == NONE) {
-				sleep(1);
-			}
-		}
 	}
 }
 

@@ -27,9 +27,7 @@ public:
 
 	struct AskTaskResponse {
 		// Lab2: Your definition here.
-		int id;
-		int index;
-		mr_tasktype tasktype;
+
 	};
 
 	struct AskTaskRequest {
