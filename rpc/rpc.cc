@@ -74,6 +74,8 @@
 #include "gettime.h"
 #include "lang/verify.h"
 
+#include "mr_protocol.h"
+
 const rpcc::TO rpcc::to_max = { 120000 };
 const rpcc::TO rpcc::to_min = { 1000 };
 

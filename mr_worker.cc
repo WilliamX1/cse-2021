@@ -6,15 +6,19 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <dirent.h>
-#include <string>
+#include <string.h>
 
 #include <mutex>
 #include <string>
 #include <vector>
 #include <map>
+#include <set>
+#include <algorithm>
+#include <string.h>
 
 #include "rpc.h"
 #include "mr_protocol.h"
+#include "chfs_client.h"
 
 using namespace std;
 
@@ -42,6 +46,10 @@ bool judgeStr(string& str) { /* 判断是否合法 */
 };
 string strPlus(string str1, string str2) {
     return to_string(stol(str1) + stol(str2));
+};
+int string2reduce(string key) {
+	std::hash<std::string> h;
+	return h(key) % REDUCER_COUNT;
 };
 
 //
@@ -111,8 +119,8 @@ public:
 	void doWork();
 
 private:
-	void doMap(int index, const vector<string> &filenames);
-	void doReduce(int index);
+	void doMap(int index, const vector<string> &readfiles);
+	void doReduce(int index, const vector<string> &readfiles);
 	void doSubmit(mr_tasktype taskType, int index);
 
 	mutex mtx;
@@ -122,6 +130,8 @@ private:
 	std::string basedir;
 	MAPF mapf;
 	REDUCEF reducef;
+
+	chfs_client* chfs;
 };
 
 
@@ -137,17 +147,106 @@ Worker::Worker(const string &dst, const string &dir, MAPF mf, REDUCEF rf)
 	if (this->cl->bind() < 0) {
 		printf("mr worker: call bind error\n");
 	}
+
+	chfs = new chfs_client(this->basedir);
 }
 
-void Worker::doMap(int index, const vector<string> &filenames)
+void Worker::doMap(int index, const vector<string>& readfiles)
 {
 	// Lab2: Your code goes here.
+	vector <KeyVal> intermediate;
+
+	for (unsigned int i = 0; i < readfiles.size(); i++) {
+		string filename = readfiles[i];
+        string content;
+        // Read the whole file into the buffer.
+        // printf("Read the whole file into the buffer.\n");
+        // printf("%s\n", content.c_str());
+        getline(ifstream(filename), content, '\0');
+        // printf("Finish Read the whole file into the buffer.\n");
+        vector <KeyVal> KVA = Map(filename, content);
+		
+		intermediate.insert(intermediate.end(), KVA.begin(), KVA.end());
+	};
+
+	// ofstream write[REDUCER_COUNT];
+
+	// for (unsigned int i = 0; i < REDUCER_COUNT; i++)
+	// {
+	// 	write[i].open("mr-" + index + '-' + i, std::ios::out | std::ios::app);
+	// 	if (!write[i].is_open()) {
+	// 		fprintf(stderr, "create inter-medium file failed\n");
+	// 		exit(-1);
+	// 	};
+	// };
+
+	// for (unsigned int i = 0; i < intermediate.size(); i++)
+	// {
+	// 	int reduce = string2reduce(intermediate[i].key);
+	// 	write[reduce] << intermediate[i].key << " " << intermediate[i].val << endl;
+	// };
+
+	// for (unsigned int i = 0; i < REDUCER_COUNT; i++)
+	// 	write[i].close();
+
+	for (unsigned int i = 0; i < intermediate.size(); i++)
+		printf("%s %s\n", intermediate[i].key.data(), intermediate[i].val);
+	
 	return;
 }
 
-void Worker::doReduce(int index)
+void Worker::doReduce(int index, const vector<string>& readfiles)
 {
 	// Lab2: Your code goes here.
+	vector <KeyVal> intermediate;
+
+	for (unsigned int i = 0; i < readfiles.size(); i++) {
+		string filename = readfiles[i];
+        string content;
+        // Read the whole file into the buffer.
+        // printf("Read the whole file into the buffer.\n");
+        // printf("%s\n", content.c_str());
+        getline(ifstream(filename), content, '\0');
+        // printf("Finish Read the whole file into the buffer.\n");
+        vector <KeyVal> KVA = Map(filename, content);
+		intermediate.insert(intermediate.end(), KVA.begin(), KVA.end());
+	};
+
+    sort(intermediate.begin(), intermediate.end(),
+    	[](KeyVal const & a, KeyVal const & b) {
+        // int ret = strcasecmp(a.key.c_str(), b.key.c_str());
+        // return ret == 0 ? a.key > b.key : ret < 0;
+        return a.key < b.key;
+	});
+
+	// ofstream write;
+
+	// write.open("mr-" + index, std::ios::out | std::ios::app);
+	// if (!write.is_open()) {
+	// 	fprintf(stderr, "create inter-medium file failed\n");
+	// 	exit(-1);
+	// };
+	
+	for (unsigned int i = 0; i < intermediate.size(); i++) {
+		unsigned int j = i + 1;
+		for (; j < intermediate.size() && intermediate[j].key == intermediate[i].key;)
+			j++;
+		
+		vector < string > values;
+		for (unsigned int k = i; k < j; k++) {
+			values.push_back(intermediate[k].val);
+		}
+
+		string output = Reduce(intermediate[i].key, values);
+		// write << intermediate[i].key.data() << output.data();
+		printf("%s %s\n", intermediate[i].key.data(), output.data());
+
+		i = j;
+	};
+
+	// write.close();
+
+	return;
 }
 
 void Worker::doSubmit(mr_tasktype taskType, int index)
@@ -171,7 +270,21 @@ void Worker::doWork()
 		// if mr_tasktype::REDUCE, then doReduce and doSubmit
 		// if mr_tasktype::NONE, meaning currently no work is needed, then sleep
 		//
-	}
+		mr_protocol::AskTaskResponse reply;
+		int d;
+		mr_protocol::status ret = this->cl->call(mr_protocol::asktask, d, reply);
+		if (ret == mr_protocol::OK) {
+			if (reply.taskType == MAP) {
+				doMap(reply.index, reply.readfiles);
+				doSubmit(reply.taskType, reply.index);
+			} else if (reply.taskType == REDUCE) {
+				doReduce(reply.index, reply.readfiles);
+				doSubmit(reply.taskType, reply.index);
+			} else if (reply.taskType == NONE) {
+				sleep(1);
+			};
+		};	
+	};
 }
 
 int main(int argc, char **argv)

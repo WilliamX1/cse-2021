@@ -23,7 +23,7 @@ struct Task {
 class Coordinator {
 public:
 	Coordinator(const vector<string> &files, int nReduce);
-	mr_protocol::status askTask(int, mr_protocol::AskTaskResponse &reply);
+	mr_protocol::status askTask(int d, mr_protocol::AskTaskResponse& reply);
 	mr_protocol::status submitTask(int taskType, int index, bool &success);
 	bool isFinishedMap();
 	bool isFinishedReduce();
@@ -39,6 +39,8 @@ private:
 	long completedMapCount;
 	long completedReduceCount;
 	bool isFinished;
+
+	static long inc; /* 用作文件后缀，只增不减 */
 	
 	string getFile(int index);
 };
@@ -46,13 +48,89 @@ private:
 
 // Your code here -- RPC handlers for the worker to call.
 
-mr_protocol::status Coordinator::askTask(int, mr_protocol::AskTaskResponse &reply) {
+mr_protocol::status Coordinator::askTask(int d, mr_protocol::AskTaskResponse& reply) {
 	// Lab2 : Your code goes here.
+	/* 文件命名方式为 mr-X-Y，X 代表 mapTasks 的 index，Y 代表散列后应该被分到 reduceTask 的 index */
+	/* 优先分配 mapTask */
+	for (unsigned int i = 0; i < mapTasks.size(); i++)
+	{
+		if (mapTasks[i].isCompleted || mapTasks[i].isAssigned) continue;
+		else {
+			int index = mapTasks[i].index;
+			string readfile = getFile(index);
+			
+			reply.taskType = MAP;
+			reply.index = index;
+			reply.readfiles.push_back(readfile);
+
+			mapTasks[i].isAssigned = true;
+			return mr_protocol::OK;
+		};
+	};
+
+	/* 分配 reduceTask */
+	for (unsigned int i = 0; i < reduceTasks.size(); i++)
+	{
+		if (reduceTasks[i].isCompleted || reduceTasks[i].isAssigned) continue;
+		else {
+			int index = reduceTasks[i].index;
+
+			reply.taskType = REDUCE;
+			reply.index = index;
+			
+			for (unsigned int j = 0; j < mapTasks.size(); j++)
+			{
+				string readfile = "mr-" + mapTasks[j].index + '-' + reduceTasks[i].index;
+				reply.readfiles.push_back(readfile);
+			};
+
+			reduceTasks[i].isAssigned = true;
+			return mr_protocol::OK;
+		}
+	}
+
+	// /* 所有 task 都已经完成 */
+	reply.taskType = NONE;
+
 	return mr_protocol::OK;
 }
 
 mr_protocol::status Coordinator::submitTask(int taskType, int index, bool &success) {
 	// Lab2 : Your code goes here.
+	success = false;
+
+	if (taskType == NONE) {
+		success = true;
+		return mr_protocol::OK;
+	}
+
+	else if (taskType == MAP) {
+		for (unsigned int i = 0; i < mapTasks.size(); i++)
+			if (mapTasks[i].index == index) {
+				if (mapTasks[i].isCompleted == false) {
+			  		mapTasks[i].isCompleted = true;
+					this->completedMapCount++;
+				};
+				break;
+			};
+		success = true;
+		return mr_protocol::OK;
+	}
+
+	else if (taskType == REDUCE) {
+		for (unsigned int i = 0; i < reduceTasks.size(); i++)
+			if (reduceTasks[i].index == index) {
+				if (reduceTasks[i].isCompleted == false) {
+					reduceTasks[i].isCompleted = true;
+					this->completedReduceCount++;
+				};
+				break;
+			};
+		success = true;
+		return mr_protocol::OK;
+	}
+
+	success = true;
 	return mr_protocol::OK;
 }
 
@@ -147,8 +225,8 @@ int main(int argc, char *argv[])
 	// Lab2: Your code here.
 	// Hints: Register "askTask" and "submitTask" as RPC handlers here
 	// 
-	// server.reg(mr_protocol::asktask, &c, &Coordinator::askTask);
-	// server.reg(mr_protocol::submittask, &c, &Coordinator::submitTask);
+	server.reg(mr_protocol::asktask, &c, &Coordinator::askTask);
+	server.reg(mr_protocol::submittask, &c, &Coordinator::submitTask);
 	while(!c.Done()) {
 		sleep(1);
 	}
