@@ -39,6 +39,7 @@ private:
 	long completedMapCount;
 	long completedReduceCount;
 	bool isFinished;
+	bool isSummary;
 
 	static long inc; /* 用作文件后缀，只增不减 */
 	
@@ -51,6 +52,9 @@ private:
 mr_protocol::status Coordinator::askTask(int d, mr_protocol::AskTaskResponse& reply) {
 	// Lab2 : Your code goes here.
 	/* 文件命名方式为 mr-X-Y，X 代表 mapTasks 的 index，Y 代表散列后应该被分到 reduceTask 的 index */
+	
+	reply.readfiles.clear();
+
 	/* 优先分配 mapTask */
 	for (unsigned int i = 0; i < mapTasks.size(); i++)
 	{
@@ -63,9 +67,16 @@ mr_protocol::status Coordinator::askTask(int d, mr_protocol::AskTaskResponse& re
 			reply.index = index;
 			reply.readfiles.push_back(readfile);
 
+			this->mtx.lock();
 			mapTasks[i].isAssigned = true;
+			this->mtx.unlock();
 			return mr_protocol::OK;
 		};
+	};
+
+	if (!isFinishedMap()) {
+		reply.taskType = NONE;
+		return mr_protocol::OK;
 	};
 
 	/* 分配 reduceTask */
@@ -80,14 +91,37 @@ mr_protocol::status Coordinator::askTask(int d, mr_protocol::AskTaskResponse& re
 			
 			for (unsigned int j = 0; j < mapTasks.size(); j++)
 			{
-				string readfile = "mr-" + mapTasks[j].index + '-' + reduceTasks[i].index;
+				string readfile = "mr-" + to_string(mapTasks[j].index) + '-' + to_string(reduceTasks[i].index);
 				reply.readfiles.push_back(readfile);
 			};
-
+			this->mtx.lock();
 			reduceTasks[i].isAssigned = true;
+			this->mtx.unlock();
 			return mr_protocol::OK;
 		}
 	}
+
+	/* 最后汇总 */
+	this->mtx.lock();
+	bool isOK = this->isSummary;
+	this->mtx.unlock();
+	if (isFinishedMap() && isFinishedReduce() && !isOK) {
+		reply.taskType = SUMMARY;
+		reply.index = -1;
+
+		fprintf(stderr, "\nSUMMAYR\n");
+		for (unsigned int i = 0; i < reduceTasks.size(); i++)
+		{
+			string readfile = "mr-" + to_string(reduceTasks[i].index);
+			reply.readfiles.push_back(readfile);
+		};
+
+		this->mtx.lock();
+		this->isSummary = true;
+		this->mtx.unlock();
+
+		return mr_protocol::OK;
+	};
 
 	// /* 所有 task 都已经完成 */
 	reply.taskType = NONE;
@@ -108,8 +142,12 @@ mr_protocol::status Coordinator::submitTask(int taskType, int index, bool &succe
 		for (unsigned int i = 0; i < mapTasks.size(); i++)
 			if (mapTasks[i].index == index) {
 				if (mapTasks[i].isCompleted == false) {
+					this->mtx.lock();
 			  		mapTasks[i].isCompleted = true;
 					this->completedMapCount++;
+					this->mtx.unlock();
+
+					fprintf(stderr, "MAP, index: %d finish!\n", index);
 				};
 				break;
 			};
@@ -121,11 +159,26 @@ mr_protocol::status Coordinator::submitTask(int taskType, int index, bool &succe
 		for (unsigned int i = 0; i < reduceTasks.size(); i++)
 			if (reduceTasks[i].index == index) {
 				if (reduceTasks[i].isCompleted == false) {
+					this->mtx.lock();
 					reduceTasks[i].isCompleted = true;
 					this->completedReduceCount++;
+					this->mtx.unlock();
+
+					fprintf(stderr, "REDUCE, index: %d finish!\n", index);
 				};
 				break;
 			};
+		success = true;
+		return mr_protocol::OK;
+	}
+
+	else if (taskType == SUMMARY) {
+		this->mtx.lock();
+		this->isFinished = true;
+		this->mtx.unlock();
+
+		fprintf(stderr, "SUMMARY, index: %d finish!\n", index);
+
 		success = true;
 		return mr_protocol::OK;
 	}
@@ -183,6 +236,7 @@ Coordinator::Coordinator(const vector<string> &files, int nReduce)
 	this->isFinished = false;
 	this->completedMapCount = 0;
 	this->completedReduceCount = 0;
+	this->isSummary = false;
 
 	int filesize = files.size();
 	for (int i = 0; i < filesize; i++) {

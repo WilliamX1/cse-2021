@@ -87,9 +87,7 @@ string Reduce(const string &key, const vector <string> &values)
     string ret = "0";
     int size = values.size();
     for (int i = 0; i < size; i++)
-        if (key.compare(values[i])) {
-            ret = strPlus(ret, values[i]);
-        }; /* 相等时 compare 返回值为0 */
+        ret = strPlus(ret, values[i]);
     return ret;
 }
 

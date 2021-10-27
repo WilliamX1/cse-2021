@@ -4,6 +4,8 @@
         "string": "cpp",
         "vector": "cpp",
         "iosfwd": "cpp",
-        "algorithm": "cpp"
+        "algorithm": "cpp",
+        "fstream": "cpp",
+        "locale": "cpp"
     }
 }

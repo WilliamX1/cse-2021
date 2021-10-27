@@ -14,7 +14,6 @@
 #include <map>
 #include <set>
 #include <algorithm>
-#include <string.h>
 
 #include "rpc.h"
 #include "mr_protocol.h"
@@ -25,6 +24,9 @@ using namespace std;
 struct KeyVal {
     string key;
     string val;
+
+	KeyVal(){};
+	KeyVal(string k, string v) : key(k), val(v) {};
 };
 
 bool isLowerLetter(char ch) { /* 判断是否是小写英文字母 */
@@ -100,11 +102,8 @@ string Reduce(const string &key, const vector < string > &values)
 	// Your code goes here
     // Hints: return the number of occurrences of the word.
     string ret = "0";
-    int size = values.size();
-    for (int i = 0; i < size; i++)
-        if (key.compare(values[i])) {
-            ret = strPlus(ret, values[i]);
-        }; /* 相等时 compare 返回值为0 */
+    for (unsigned int i = 0; i < values.size(); i++)
+		ret = strPlus(ret, values[i]);
     return ret;
 }
 
@@ -121,6 +120,7 @@ public:
 private:
 	void doMap(int index, const vector<string> &readfiles);
 	void doReduce(int index, const vector<string> &readfiles);
+	void doSummary(int index, const vector<string> &readfiles);
 	void doSubmit(mr_tasktype taskType, int index);
 
 	mutex mtx;
@@ -130,8 +130,6 @@ private:
 	std::string basedir;
 	MAPF mapf;
 	REDUCEF reducef;
-
-	chfs_client* chfs;
 };
 
 
@@ -147,8 +145,6 @@ Worker::Worker(const string &dst, const string &dir, MAPF mf, REDUCEF rf)
 	if (this->cl->bind() < 0) {
 		printf("mr worker: call bind error\n");
 	}
-
-	chfs = new chfs_client(this->basedir);
 }
 
 void Worker::doMap(int index, const vector<string>& readfiles)
@@ -167,30 +163,33 @@ void Worker::doMap(int index, const vector<string>& readfiles)
         vector <KeyVal> KVA = Map(filename, content);
 		
 		intermediate.insert(intermediate.end(), KVA.begin(), KVA.end());
+
 	};
 
-	// ofstream write[REDUCER_COUNT];
+	FILE* write[REDUCER_COUNT];
 
-	// for (unsigned int i = 0; i < REDUCER_COUNT; i++)
-	// {
-	// 	write[i].open("mr-" + index + '-' + i, std::ios::out | std::ios::app);
-	// 	if (!write[i].is_open()) {
-	// 		fprintf(stderr, "create inter-medium file failed\n");
-	// 		exit(-1);
-	// 	};
-	// };
-
-	// for (unsigned int i = 0; i < intermediate.size(); i++)
-	// {
-	// 	int reduce = string2reduce(intermediate[i].key);
-	// 	write[reduce] << intermediate[i].key << " " << intermediate[i].val << endl;
-	// };
-
-	// for (unsigned int i = 0; i < REDUCER_COUNT; i++)
-	// 	write[i].close();
+	for (unsigned int i = 0; i < REDUCER_COUNT; i++)
+	{
+		string filename = this->basedir + "mr-" + to_string(index) + '-' + to_string(i);
+		write[i] = fopen(filename.c_str(), "w");
+		if (write[i] == NULL) {
+			fprintf(stderr, "create map inter-medium file failed\n");
+			exit(-1);
+		};
+	};
 
 	for (unsigned int i = 0; i < intermediate.size(); i++)
-		printf("%s %s\n", intermediate[i].key.data(), intermediate[i].val);
+	{
+		if (intermediate[i].key == "ACT") {
+			fprintf(stderr, "%s\n", intermediate[i].val.data());
+		}
+		int reduce = string2reduce(intermediate[i].key);
+		// if (intermediate[i].key == "ACT") fprintf(stderr, "hash: %d\n", reduce);
+		fprintf(write[reduce], "%s %s\n", intermediate[i].key.data(), intermediate[i].val.data());
+	};
+
+	for (unsigned int i = 0; i < REDUCER_COUNT; i++)
+		fclose(write[i]);
 	
 	return;
 }
@@ -201,14 +200,27 @@ void Worker::doReduce(int index, const vector<string>& readfiles)
 	vector <KeyVal> intermediate;
 
 	for (unsigned int i = 0; i < readfiles.size(); i++) {
-		string filename = readfiles[i];
-        string content;
+		string filename = this->basedir + readfiles[i];
+
+		string content;
         // Read the whole file into the buffer.
         // printf("Read the whole file into the buffer.\n");
         // printf("%s\n", content.c_str());
         getline(ifstream(filename), content, '\0');
         // printf("Finish Read the whole file into the buffer.\n");
-        vector <KeyVal> KVA = Map(filename, content);
+
+		vector <KeyVal> KVA;
+		int start = 0, mid = 0, end = 0;
+		while (content[end] != '\0') {
+			mid = content.find_first_of(' ', start);
+			end = content.find_first_of('\n', start);
+
+			KeyVal kv(content.substr(start, mid - start), content.substr(mid + 1, end - (mid + 1)));
+			KVA.push_back(kv);
+
+			start = ++end;
+		};
+
 		intermediate.insert(intermediate.end(), KVA.begin(), KVA.end());
 	};
 
@@ -216,37 +228,67 @@ void Worker::doReduce(int index, const vector<string>& readfiles)
     	[](KeyVal const & a, KeyVal const & b) {
         // int ret = strcasecmp(a.key.c_str(), b.key.c_str());
         // return ret == 0 ? a.key > b.key : ret < 0;
-        return a.key < b.key;
+        return a.key <= b.key;
 	});
 
-	// ofstream write;
+	FILE* write;
+	string filename = this->basedir + "mr-" + to_string(index);
+	// string filename = this->basedir + "mr-out";
 
-	// write.open("mr-" + index, std::ios::out | std::ios::app);
-	// if (!write.is_open()) {
-	// 	fprintf(stderr, "create inter-medium file failed\n");
-	// 	exit(-1);
-	// };
+	fprintf(stderr, "%s start!\n", filename.c_str());
+	write = fopen(filename.c_str(), "w");
+	if (write == NULL) {
+		fprintf(stderr, "create reduce inter-medium file failed\n");
+		exit(-1);
+	};
 	
 	for (unsigned int i = 0; i < intermediate.size(); i++) {
 		unsigned int j = i + 1;
 		for (; j < intermediate.size() && intermediate[j].key == intermediate[i].key;)
 			j++;
-		
 		vector < string > values;
+
+		// if (intermediate[i].key == "ACT") fprintf(stderr, "ACT: %s %d %d\n", intermediate[i].val.data(), i, j);
+
 		for (unsigned int k = i; k < j; k++) {
 			values.push_back(intermediate[k].val);
 		}
 
 		string output = Reduce(intermediate[i].key, values);
-		// write << intermediate[i].key.data() << output.data();
-		printf("%s %s\n", intermediate[i].key.data(), output.data());
+		fprintf(write, "%s %s\n", intermediate[i].key.data(), output.data());
 
 		i = j;
 	};
 
-	// write.close();
+	fclose(write);
 
 	return;
+}
+
+void Worker::doSummary (int index, const vector<string> &readfiles) 
+{
+	string output = "";
+	for (unsigned int i = 0; i < readfiles.size(); i++)
+	{
+		string filename = this->basedir + readfiles[i];
+		string content;
+		getline(ifstream(filename), content, '\0');
+
+		fprintf(stderr, "filename: %s\n", readfiles[i].data());
+		// fprintf(stderr, "%s\n", content.data());
+
+		output += content;
+	};
+
+	FILE* write;
+	string writefile = this->basedir + "mr-out";
+	write = fopen(writefile.c_str(), "w");
+	if (write == NULL) {
+		fprintf(stderr, "create final summary file failed\n");
+		exit(-1);
+	};
+	fprintf(write, "%s", output.data());
+	fclose(write);
 }
 
 void Worker::doSubmit(mr_tasktype taskType, int index)
@@ -280,6 +322,9 @@ void Worker::doWork()
 			} else if (reply.taskType == REDUCE) {
 				doReduce(reply.index, reply.readfiles);
 				doSubmit(reply.taskType, reply.index);
+			} else if (reply.taskType == SUMMARY) {
+				doSummary(reply.index, reply.readfiles);
+				doSubmit(reply.taskType, reply.index);
 			} else if (reply.taskType == NONE) {
 				sleep(1);
 			};
@@ -296,7 +341,6 @@ int main(int argc, char **argv)
 
 	MAPF mf = Map;
 	REDUCEF rf = Reduce;
-	
 	Worker w(argv[1], argv[2], mf, rf);
 	w.doWork();
 

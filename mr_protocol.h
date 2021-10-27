@@ -13,7 +13,8 @@ using namespace std;
 enum mr_tasktype {
 	NONE = 0, // this flag means no task needs to be performed at this point
 	MAP,
-	REDUCE
+	REDUCE,
+	SUMMARY
 };
 
 class mr_protocol {
