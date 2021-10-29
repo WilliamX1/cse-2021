@@ -194,10 +194,6 @@ mr_protocol::status Coordinator::submitTask(int taskType, int index, bool &succe
 		};
 	}
 
-	else if (taskType == SUMMARY) {
-		this->isFinished = true;
-		fprintf(stderr, "coordinator: SUMMARY task finish!\n");
-	}
 
 	success = true;
 
