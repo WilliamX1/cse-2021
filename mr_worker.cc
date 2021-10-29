@@ -14,6 +14,7 @@
 #include <map>
 #include <set>
 #include <algorithm>
+#include <unordered_map>
 
 #include "rpc.h"
 #include "mr_protocol.h"
@@ -149,6 +150,7 @@ Worker::Worker(const string &dst, const string &dir, MAPF mf, REDUCEF rf)
 
 void Worker::doMap(int index, const vector<string>& readfiles)
 {
+	fprintf(stderr, "worker: get MAP task %d\n", index);
 	// Lab2: Your code goes here.
 	vector <KeyVal> intermediate;
 
@@ -180,11 +182,7 @@ void Worker::doMap(int index, const vector<string>& readfiles)
 
 	for (unsigned int i = 0; i < intermediate.size(); i++)
 	{
-		if (intermediate[i].key == "ACT") {
-			fprintf(stderr, "%s\n", intermediate[i].val.data());
-		}
 		int reduce = string2reduce(intermediate[i].key);
-		// if (intermediate[i].key == "ACT") fprintf(stderr, "hash: %d\n", reduce);
 		fprintf(write[reduce], "%s %s\n", intermediate[i].key.data(), intermediate[i].val.data());
 	};
 
@@ -196,69 +194,97 @@ void Worker::doMap(int index, const vector<string>& readfiles)
 
 void Worker::doReduce(int index, const vector<string>& readfiles)
 {
+	fprintf(stderr, "worker: get REDUCE task %d\n", index);
 	// Lab2: Your code goes here.
-	vector <KeyVal> intermediate;
+	// vector <KeyVal> intermediate;
+	unordered_map<string, uint64_t> intermediate;
 
 	for (unsigned int i = 0; i < readfiles.size(); i++) {
 		string filename = this->basedir + readfiles[i];
 
-		string content;
+		// string content;
         // Read the whole file into the buffer.
         // printf("Read the whole file into the buffer.\n");
         // printf("%s\n", content.c_str());
-        getline(ifstream(filename), content, '\0');
+        // getline(ifstream(filename), content, '\0');
         // printf("Finish Read the whole file into the buffer.\n");
 
-		vector <KeyVal> KVA;
-		int start = 0, mid = 0, end = 0;
-		while (content[end] != '\0') {
-			mid = content.find_first_of(' ', start);
-			end = content.find_first_of('\n', start);
-
-			KeyVal kv(content.substr(start, mid - start), content.substr(mid + 1, end - (mid + 1)));
-			KVA.push_back(kv);
-
-			start = ++end;
+		ifstream file(filename, ios::in);
+		if (!file.is_open()) {
+			fprintf(stderr, "worker: file %s not open\n", filename.data());
+			continue;
 		};
 
-		intermediate.insert(intermediate.end(), KVA.begin(), KVA.end());
+		string key, val;
+		while (file >> key >> val) {
+			intermediate[key] += atoll(val.c_str());
+		};
+		// vector <KeyVal> KVA;
+		// int start = 0, mid = 0, end = 0;
+		// while (content[end] != '\0') {
+
+		// 	mid = start;
+		// 	while (content[mid] != ' ') mid++;
+		// 	end = start;
+		// 	while (content[end] != '\n') end++;
+			
+		// 	// mid = content.find_first_of(' ', start);
+		// 	// end = content.find_first_of('\n', start);
+
+		// 	string key = content.substr(start, mid - start);
+		// 	int val = stol(content.substr(mid + 1, end - (mid + 1)));
+			
+		// 	unordered_map<string, int>::iterator iter = intermediate.find(key);
+		// 	if (iter != intermediate.end()) iter->second += val;
+		// 	else iter->second = val;
+		// 	// KeyVal kv(content.substr(start, mid - start), content.substr(mid + 1, end - (mid + 1)));
+		// 	// KVA.push_back(kv);
+
+		// 	start = ++end;
+		// };
+		// intermediate.insert(intermediate.end(), KVA.begin(), KVA.end());
+		file.close();
 	};
 
-    sort(intermediate.begin(), intermediate.end(),
-    	[](KeyVal const & a, KeyVal const & b) {
-        // int ret = strcasecmp(a.key.c_str(), b.key.c_str());
-        // return ret == 0 ? a.key > b.key : ret < 0;
-        return a.key <= b.key;
-	});
+    // sort(intermediate.begin(), intermediate.end(),
+    // 	[](KeyVal const & a, KeyVal const & b) {
+    //     // int ret = strcasecmp(a.key.c_str(), b.key.c_str());
+    //     // return ret == 0 ? a.key > b.key : ret < 0;
+    //     return a.key <= b.key;
+	// });
 
 	FILE* write;
 	string filename = this->basedir + "mr-" + to_string(index);
 	// string filename = this->basedir + "mr-out";
 
-	fprintf(stderr, "%s start!\n", filename.c_str());
 	write = fopen(filename.c_str(), "w");
 	if (write == NULL) {
 		fprintf(stderr, "create reduce inter-medium file failed\n");
 		exit(-1);
 	};
 	
-	for (unsigned int i = 0; i < intermediate.size(); i++) {
-		unsigned int j = i + 1;
-		for (; j < intermediate.size() && intermediate[j].key == intermediate[i].key;)
-			j++;
-		vector < string > values;
-
-		// if (intermediate[i].key == "ACT") fprintf(stderr, "ACT: %s %d %d\n", intermediate[i].val.data(), i, j);
-
-		for (unsigned int k = i; k < j; k++) {
-			values.push_back(intermediate[k].val);
-		}
-
-		string output = Reduce(intermediate[i].key, values);
-		fprintf(write, "%s %s\n", intermediate[i].key.data(), output.data());
-
-		i = j;
+	unordered_map<string, uint64_t>::iterator iter = intermediate.begin();
+	while (iter != intermediate.end()) {
+		// string key = iter->first;
+		// string val = to_string(iter->second);
+		fprintf(write, "%s %s\n", (iter->first).data(), to_string(iter->second).data());
+		iter++;
 	};
+	// for (unsigned int i = 0; i < intermediate.size(); i++) {
+	// 	unsigned int j = i + 1;
+	// 	for (; j < intermediate.size() && intermediate[j].key == intermediate[i].key;)
+	// 		j++;
+	// 	vector < string > values;
+
+	// 	for (unsigned int k = i; k < j; k++) {
+	// 		values.push_back(intermediate[k].val);
+	// 	}
+
+	// 	string output = Reduce(intermediate[i].key, values);
+	// 	fprintf(write, "%s %s\n", intermediate[i].key.data(), output.data());
+
+	// 	i = j;
+	// };
 
 	fclose(write);
 
@@ -267,18 +293,7 @@ void Worker::doReduce(int index, const vector<string>& readfiles)
 
 void Worker::doSummary (int index, const vector<string> &readfiles) 
 {
-	string output = "";
-	for (unsigned int i = 0; i < readfiles.size(); i++)
-	{
-		string filename = this->basedir + readfiles[i];
-		string content;
-		getline(ifstream(filename), content, '\0');
-
-		fprintf(stderr, "filename: %s\n", readfiles[i].data());
-		// fprintf(stderr, "%s\n", content.data());
-
-		output += content;
-	};
+	fprintf(stderr, "worker: get SUMMARY task %d\n", index);
 
 	FILE* write;
 	string writefile = this->basedir + "mr-out";
@@ -287,8 +302,19 @@ void Worker::doSummary (int index, const vector<string> &readfiles)
 		fprintf(stderr, "create final summary file failed\n");
 		exit(-1);
 	};
-	fprintf(write, "%s", output.data());
+
+	for (unsigned int i = 0; i < readfiles.size(); i++)
+	{
+		string filename = this->basedir + readfiles[i];
+		string content;
+		getline(ifstream(filename), content, '\0');
+
+		fprintf(write, "%s", content.data());
+	};
+
 	fclose(write);
+
+	return;
 }
 
 void Worker::doSubmit(mr_tasktype taskType, int index)

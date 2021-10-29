@@ -6,6 +6,12 @@
         "iosfwd": "cpp",
         "algorithm": "cpp",
         "fstream": "cpp",
-        "locale": "cpp"
+        "locale": "cpp",
+        "__mutex_base": "cpp",
+        "__config": "cpp",
+        "complex": "cpp",
+        "new": "cpp",
+        "unordered_map": "cpp",
+        "utility": "cpp"
     }
 }

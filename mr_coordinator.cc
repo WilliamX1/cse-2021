@@ -27,6 +27,7 @@ public:
 	mr_protocol::status submitTask(int taskType, int index, bool &success);
 	bool isFinishedMap();
 	bool isFinishedReduce();
+	bool assignTask(Task& task);
 	bool Done();
 
 private:
@@ -53,138 +54,189 @@ mr_protocol::status Coordinator::askTask(int d, mr_protocol::AskTaskResponse& re
 	// Lab2 : Your code goes here.
 	/* 文件命名方式为 mr-X-Y，X 代表 mapTasks 的 index，Y 代表散列后应该被分到 reduceTask 的 index */
 	
-	reply.readfiles.clear();
+	Task task;
 
+	// this->mtx.lock();
 	/* 优先分配 mapTask */
-	for (unsigned int i = 0; i < mapTasks.size(); i++)
-	{
-		if (mapTasks[i].isCompleted || mapTasks[i].isAssigned) continue;
-		else {
-			int index = mapTasks[i].index;
-			string readfile = getFile(index);
-			
-			reply.taskType = MAP;
-			reply.index = index;
-			reply.readfiles.push_back(readfile);
-
-			this->mtx.lock();
-			mapTasks[i].isAssigned = true;
-			this->mtx.unlock();
-			return mr_protocol::OK;
-		};
-	};
-
-	if (!isFinishedMap()) {
-		reply.taskType = NONE;
-		return mr_protocol::OK;
-	};
-
-	/* 分配 reduceTask */
-	for (unsigned int i = 0; i < reduceTasks.size(); i++)
-	{
-		if (reduceTasks[i].isCompleted || reduceTasks[i].isAssigned) continue;
-		else {
-			int index = reduceTasks[i].index;
-
-			reply.taskType = REDUCE;
-			reply.index = index;
-			
+	if (assignTask(task)) {
+		reply.index = task.index;
+		reply.taskType = (mr_tasktype) task.taskType;
+		if (reply.taskType == MAP) {
+			reply.readfiles.push_back(getFile(reply.index));
+		} else if (reply.taskType == REDUCE) {
 			for (unsigned int j = 0; j < mapTasks.size(); j++)
 			{
-				string readfile = "mr-" + to_string(mapTasks[j].index) + '-' + to_string(reduceTasks[i].index);
+				string readfile = "mr-" + to_string(mapTasks[j].index) + '-' + to_string(reply.index);
 				reply.readfiles.push_back(readfile);
 			};
-			this->mtx.lock();
-			reduceTasks[i].isAssigned = true;
-			this->mtx.unlock();
-			return mr_protocol::OK;
-		}
-	}
+		} else {
+			for (unsigned int j = 0; j < mapTasks.size(); j++)
+			{
+				string readfile = "mr-" + to_string(mapTasks[j].index);
+				reply.readfiles.push_back(readfile);
+			};
+		};
+		fprintf(stderr, "coordinator: assign %ld files to worker %d\n", reply.readfiles.size(), reply.index);
+	} else {
+		fprintf(stderr, "coordinator: no available tasks\n");
+		reply.index = -1;
+		reply.taskType = NONE;
+		reply.readfiles.clear();
+	};
+	// for (unsigned int i = 0; i < mapTasks.size(); i++)
+	// {
+	// 	if (mapTasks[i].isCompleted || mapTasks[i].isAssigned) continue;
+	// 	else {
+	// 		int index = mapTasks[i].index;
+	// 		string readfile = getFile(index);
+			
+	// 		reply.taskType = MAP;
+	// 		reply.index = index;
+	// 		reply.readfiles.push_back(readfile);
+
+	// 		mapTasks[i].isAssigned = true;
+
+	// 		// this->mtx.unlock();
+	// 		return mr_protocol::OK;
+	// 	};
+	// };
+
+	// if (!isFinishedMap()) {
+	// 	reply.taskType = NONE;
+
+	// 	return mr_protocol::OK;
+	// };
+
+	/* 分配 reduceTask */
+	// for (unsigned int i = 0; i < reduceTasks.size(); i++)
+	// {
+	// 	if (reduceTasks[i].isCompleted || reduceTasks[i].isAssigned) continue;
+	// 	else {
+	// 		this->mtx.lock();
+	// 		reduceTasks[i].isAssigned = true;
+	// 		this->mtx.unlock();
+
+	// 		int index = reduceTasks[i].index;
+
+	// 		reply.taskType = REDUCE;
+	// 		reply.index = index;
+			
+	// 		for (unsigned int j = 0; j < mapTasks.size(); j++)
+	// 		{
+	// 			string readfile = "mr-" + to_string(mapTasks[j].index) + '-' + to_string(reduceTasks[i].index);
+	// 			reply.readfiles.push_back(readfile);
+	// 		};
+
+	// 		return mr_protocol::OK;
+	// 	}
+	// };
+
+	// if (!isFinishedReduce()) {
+	// 	reply.taskType = NONE;
+
+	// 	return mr_protocol::OK;
+	// };
 
 	/* 最后汇总 */
-	this->mtx.lock();
-	bool isOK = this->isSummary;
-	this->mtx.unlock();
-	if (isFinishedMap() && isFinishedReduce() && !isOK) {
-		reply.taskType = SUMMARY;
-		reply.index = -1;
+	// if (isFinishedMap() && isFinishedReduce() && !isSummary) {
+	// 	reply.taskType = SUMMARY;
+	// 	reply.index = -1;
 
-		fprintf(stderr, "\nSUMMAYR\n");
-		for (unsigned int i = 0; i < reduceTasks.size(); i++)
-		{
-			string readfile = "mr-" + to_string(reduceTasks[i].index);
-			reply.readfiles.push_back(readfile);
-		};
+	// 	fprintf(stderr, "\nSUMMAYR\n");
+	// 	for (unsigned int i = 0; i < reduceTasks.size(); i++)
+	// 	{
+	// 		string readfile = "mr-" + to_string(reduceTasks[i].index);
+	// 		reply.readfiles.push_back(readfile);
+	// 	};
 
-		this->mtx.lock();
-		this->isSummary = true;
-		this->mtx.unlock();
+	// 	this->isSummary = true;
 
-		return mr_protocol::OK;
-	};
+	// 	// this->mtx.unlock();
+	// 	return mr_protocol::OK;
+	// };
 
 	// /* 所有 task 都已经完成 */
-	reply.taskType = NONE;
+	// reply.taskType = NONE;
 
+	// this->mtx.unlock();
 	return mr_protocol::OK;
 }
 
 mr_protocol::status Coordinator::submitTask(int taskType, int index, bool &success) {
 	// Lab2 : Your code goes here.
+	// this->mtx.lock();
+
+	this->mtx.lock();
+
 	success = false;
 
-	if (taskType == NONE) {
-		success = true;
-		return mr_protocol::OK;
-	}
+	if (taskType == NONE) {}
 
 	else if (taskType == MAP) {
-		for (unsigned int i = 0; i < mapTasks.size(); i++)
+		for (unsigned int i = 0; i < mapTasks.size(); i++) {
 			if (mapTasks[i].index == index) {
-				if (mapTasks[i].isCompleted == false) {
-					this->mtx.lock();
-			  		mapTasks[i].isCompleted = true;
-					this->completedMapCount++;
-					this->mtx.unlock();
-
-					fprintf(stderr, "MAP, index: %d finish!\n", index);
-				};
+				mapTasks[i].isCompleted = true;
+				this->completedMapCount++;
+				fprintf(stderr, "coordinator: MAP task %d finish!\n", index);
 				break;
 			};
-		success = true;
-		return mr_protocol::OK;
+		};
 	}
 
 	else if (taskType == REDUCE) {
-		for (unsigned int i = 0; i < reduceTasks.size(); i++)
+		for (unsigned int i = 0; i < reduceTasks.size(); i++) {
 			if (reduceTasks[i].index == index) {
-				if (reduceTasks[i].isCompleted == false) {
-					this->mtx.lock();
-					reduceTasks[i].isCompleted = true;
-					this->completedReduceCount++;
-					this->mtx.unlock();
-
-					fprintf(stderr, "REDUCE, index: %d finish!\n", index);
-				};
+				reduceTasks[i].isCompleted = true;
+				this->completedReduceCount++;
+				fprintf(stderr, "coordinator: REDUCE task index: %d finish!\n", index);
 				break;
 			};
-		success = true;
-		return mr_protocol::OK;
+		};
 	}
 
 	else if (taskType == SUMMARY) {
-		this->mtx.lock();
 		this->isFinished = true;
-		this->mtx.unlock();
-
-		fprintf(stderr, "SUMMARY, index: %d finish!\n", index);
-
-		success = true;
-		return mr_protocol::OK;
+		fprintf(stderr, "coordinator: SUMMARY task finish!\n");
 	}
 
 	success = true;
+
+	this->mtx.unlock();
 	return mr_protocol::OK;
+}
+
+bool Coordinator::assignTask(Task& task) {
+	task.taskType = NONE;
+	bool found = false;
+	this->mtx.lock();
+	if (this->completedMapCount < long(this->mapTasks.size())) {
+		for (unsigned int i = 0; i < this->mapTasks.size(); i++) {
+			Task& thisTask = this->mapTasks[i];
+			if (!thisTask.isCompleted && !thisTask.isAssigned) {
+				task = thisTask;
+				thisTask.isAssigned = true;
+				found = true;
+				break;
+			};
+		};
+	} else if (this->completedReduceCount < long(this->reduceTasks.size())){
+		for (unsigned int i = 0; i < this->reduceTasks.size(); i++) {
+			Task& thisTask = this->reduceTasks[i];
+			if (!thisTask.isCompleted && !thisTask.isAssigned) {
+				task = thisTask;
+				thisTask.isAssigned = true;
+				found = true;
+				break;
+			};
+		};
+	} else if (!this->isSummary) {
+		this->isSummary = true;
+		task.index = 0;
+		task.taskType = SUMMARY;
+		found = true;
+	};
+	this->mtx.unlock();
+	return found;
 }
 
 string Coordinator::getFile(int index) {
