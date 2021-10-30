@@ -15,6 +15,7 @@
         "utility": "cpp",
         "__locale": "cpp",
         "__threading_support": "cpp",
-        "memory": "cpp"
+        "memory": "cpp",
+        "ios": "cpp"
     }
 }

@@ -121,7 +121,7 @@ public:
 private:
 	void doMap(int index, const vector<string> &readfiles);
 	void doReduce(int index, const vector<string> &readfiles);
-	void doSummary(int index, const vector<string> &readfiles);
+	// void doSummary(int index, const vector<string> &readfiles);
 	void doSubmit(mr_tasktype taskType, int index);
 
 	mutex mtx;
@@ -174,15 +174,15 @@ void Worker::doMap(int index, const vector<string>& readfiles)
 		intermediate.insert(intermediate.end(), KVA.begin(), KVA.end());
 	};
 
-	FILE* write[REDUCER_COUNT];
+	ofstream write[REDUCER_COUNT];
 
 	for (unsigned int i = 0; i < REDUCER_COUNT; i++)
 	{
 		string filename = this->basedir + "mr-" + to_string(index) + '-' + to_string(i);
-		write[i] = fopen(filename.c_str(), "w");
-		if (write[i] == NULL) {
-			fprintf(stderr, "create map inter-medium file failed\n");
-			exit(-1);
+		write[i].open(filename.c_str(), ios::out);
+		if (!write[i].is_open()) {
+			fprintf(stderr, "worker: file %s not open\n", filename.data());
+			continue;
 		};
 	};
 
@@ -196,8 +196,8 @@ void Worker::doMap(int index, const vector<string>& readfiles)
 
 	for (unsigned int i = 0; i < REDUCER_COUNT; i++)
 	{
-		fprintf(write[i], "%s", contents[i].data());
-		fclose(write[i]);
+		write[i] << contents[i];
+		write[i].close();		
 	}
 	
 	return;
@@ -228,7 +228,8 @@ void Worker::doReduce(int index, const vector<string>& readfiles)
 
 	fprintf(stderr, "worker: REDUCER %d is working\n", index);
 
-	string filename = "mr-" + to_string(index);
+	// string filename = "mr-" + to_string(index);
+	string filename = this->basedir + "mr-out";
 	
 	unordered_map<string, uint64_t>::iterator iter = intermediate.begin();
 	string content = "";
@@ -237,41 +238,39 @@ void Worker::doReduce(int index, const vector<string>& readfiles)
 		iter++;
 	};
 
-	ofstream write(filename, ios::out | ios::app);
-	write << content << endl;
+	fprintf(stderr, "worker: REDUCER %d nearly finish\n", index);
+	ofstream write(filename.c_str(), ios::out | ios::app);
+	if (!write.is_open()) {
+		fprintf(stderr, "worker: file %s not open\n", filename.data());
+		exit(-1);
+	}
+	write << content;
 	write.close();
 
-	// fclose(write);
-
 	return;
 }
 
-void Worker::doSummary (int index, const vector<string> &readfiles) 
-{
-	fprintf(stderr, "worker: get SUMMARY task %d\n", index);
-	working = true;
+// void Worker::doSummary (int index, const vector<string> &readfiles) 
+// {
+// 	fprintf(stderr, "worker: get SUMMARY task %d\n", index);
+// 	working = true;
 
-	FILE* write;
-	string writefile = this->basedir + "mr-out";
-	write = fopen(writefile.c_str(), "w");
-	if (write == NULL) {
-		fprintf(stderr, "create final summary file failed\n");
-		exit(-1);
-	};
+// 	string contents = "";
+// 	for (unsigned int i = 0; i < readfiles.size(); i++)
+// 	{
+// 		string filename = readfiles[i];
+// 		string content;
+// 		getline(ifstream(filename), content, '\0');
 
-	for (unsigned int i = 0; i < readfiles.size(); i++)
-	{
-		string filename = this->basedir + readfiles[i];
-		string content;
-		getline(ifstream(filename), content, '\0');
-
-		fprintf(write, "%s", content.data());
-	};
-
-	fclose(write);
-
-	return;
-}
+// 		contents += content;
+// 	};
+	
+// 	string filename = "mr-out";
+// 	ofstream write(filename.c_str(), ios::out | ios::trunc);
+// 	write << contents;
+// 	write.close();
+// 	return;
+// }
 
 void Worker::doSubmit(mr_tasktype taskType, int index)
 {
@@ -307,10 +306,12 @@ void Worker::doWork()
 			} else if (reply.taskType == REDUCE) {
 				doReduce(reply.index, reply.readfiles);
 				doSubmit(reply.taskType, reply.index);
-			} else if (reply.taskType == SUMMARY) {
-				doSummary(reply.index, reply.readfiles);
-				doSubmit(reply.taskType, reply.index);
-			} else if (reply.taskType == NONE) {
+			} 
+			// else if (reply.taskType == SUMMARY) {
+			// 	doSummary(reply.index, reply.readfiles);
+			// 	doSubmit(reply.taskType, reply.index);
+			// } 
+			else if (reply.taskType == NONE) {
 				fprintf(stderr, "worker: reveive no task\n");
 				sleep(1);
 			};

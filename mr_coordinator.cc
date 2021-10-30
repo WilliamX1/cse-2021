@@ -69,13 +69,14 @@ mr_protocol::status Coordinator::askTask(int d, mr_protocol::AskTaskResponse& re
 				string readfile = "mr-" + to_string(mapTasks[j].index) + '-' + to_string(reply.index);
 				reply.readfiles.push_back(readfile);
 			};
-		} else {
-			for (unsigned int j = 0; j < mapTasks.size(); j++)
-			{
-				string readfile = "mr-" + to_string(mapTasks[j].index);
-				reply.readfiles.push_back(readfile);
-			};
-		};
+		} 
+		// else {
+		// 	for (unsigned int j = 0; j < mapTasks.size(); j++)
+		// 	{
+		// 		string readfile = "mr-" + to_string(mapTasks[j].index);
+		// 		reply.readfiles.push_back(readfile);
+		// 	};
+		// };
 		fprintf(stderr, "coordinator: assign %ld files to worker %d\n", reply.readfiles.size(), reply.index);
 	} else {
 		fprintf(stderr, "coordinator: no available tasks\n");
@@ -194,6 +195,11 @@ mr_protocol::status Coordinator::submitTask(int taskType, int index, bool &succe
 		};
 	}
 
+	// else if (taskType == SUMMARY) {
+	// 	isFinished = true;
+	// 	fprintf(stderr, "coordinator: SUMMARY task finish!\n");
+	// }
+
 
 	success = true;
 
@@ -225,12 +231,13 @@ bool Coordinator::assignTask(Task& task) {
 				break;
 			};
 		};
-	} else if (!this->isSummary) {
-		this->isSummary = true;
-		task.index = 0;
-		task.taskType = SUMMARY;
-		found = true;
-	};
+	} 
+	// else if (!this->isSummary) {
+	// 	this->isSummary = true;
+	// 	task.index = 0;
+	// 	task.taskType = SUMMARY;
+	// 	found = true;
+	// };
 	this->mtx.unlock();
 	return found;
 }
