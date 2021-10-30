@@ -84,89 +84,11 @@ mr_protocol::status Coordinator::askTask(int d, mr_protocol::AskTaskResponse& re
 		reply.taskType = NONE;
 		reply.readfiles.clear();
 	};
-	// for (unsigned int i = 0; i < mapTasks.size(); i++)
-	// {
-	// 	if (mapTasks[i].isCompleted || mapTasks[i].isAssigned) continue;
-	// 	else {
-	// 		int index = mapTasks[i].index;
-	// 		string readfile = getFile(index);
-			
-	// 		reply.taskType = MAP;
-	// 		reply.index = index;
-	// 		reply.readfiles.push_back(readfile);
-
-	// 		mapTasks[i].isAssigned = true;
-
-	// 		// this->mtx.unlock();
-	// 		return mr_protocol::OK;
-	// 	};
-	// };
-
-	// if (!isFinishedMap()) {
-	// 	reply.taskType = NONE;
-
-	// 	return mr_protocol::OK;
-	// };
-
-	/* 分配 reduceTask */
-	// for (unsigned int i = 0; i < reduceTasks.size(); i++)
-	// {
-	// 	if (reduceTasks[i].isCompleted || reduceTasks[i].isAssigned) continue;
-	// 	else {
-	// 		this->mtx.lock();
-	// 		reduceTasks[i].isAssigned = true;
-	// 		this->mtx.unlock();
-
-	// 		int index = reduceTasks[i].index;
-
-	// 		reply.taskType = REDUCE;
-	// 		reply.index = index;
-			
-	// 		for (unsigned int j = 0; j < mapTasks.size(); j++)
-	// 		{
-	// 			string readfile = "mr-" + to_string(mapTasks[j].index) + '-' + to_string(reduceTasks[i].index);
-	// 			reply.readfiles.push_back(readfile);
-	// 		};
-
-	// 		return mr_protocol::OK;
-	// 	}
-	// };
-
-	// if (!isFinishedReduce()) {
-	// 	reply.taskType = NONE;
-
-	// 	return mr_protocol::OK;
-	// };
-
-	/* 最后汇总 */
-	// if (isFinishedMap() && isFinishedReduce() && !isSummary) {
-	// 	reply.taskType = SUMMARY;
-	// 	reply.index = -1;
-
-	// 	fprintf(stderr, "\nSUMMAYR\n");
-	// 	for (unsigned int i = 0; i < reduceTasks.size(); i++)
-	// 	{
-	// 		string readfile = "mr-" + to_string(reduceTasks[i].index);
-	// 		reply.readfiles.push_back(readfile);
-	// 	};
-
-	// 	this->isSummary = true;
-
-	// 	// this->mtx.unlock();
-	// 	return mr_protocol::OK;
-	// };
-
-	// /* 所有 task 都已经完成 */
-	// reply.taskType = NONE;
-
-	// this->mtx.unlock();
 	return mr_protocol::OK;
 }
 
 mr_protocol::status Coordinator::submitTask(int taskType, int index, bool &success) {
 	// Lab2 : Your code goes here.
-	// this->mtx.lock();
-
 	this->mtx.lock();
 
 	success = false;

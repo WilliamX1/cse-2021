@@ -125,7 +125,6 @@ private:
 	void doSubmit(mr_tasktype taskType, int index);
 
 	mutex mtx;
-	bool working;
 
 	rpcc *cl;
 	std::string basedir;
@@ -139,7 +138,6 @@ Worker::Worker(const string &dst, const string &dir, MAPF mf, REDUCEF rf)
 	this->basedir = dir;
 	this->mapf = mf;
 	this->reducef = rf;
-	this->working = false;
 
 	sockaddr_in dstsock;
 	make_sockaddr(dst.c_str(), &dstsock);
@@ -152,7 +150,6 @@ Worker::Worker(const string &dst, const string &dir, MAPF mf, REDUCEF rf)
 void Worker::doMap(int index, const vector<string>& readfiles)
 {
 	fprintf(stderr, "worker: get MAP task %d\n", index);
-	working = true;
 	// Lab2: Your code goes here.
 	vector <KeyVal> intermediate;
 
@@ -160,14 +157,8 @@ void Worker::doMap(int index, const vector<string>& readfiles)
 		string filename = readfiles[i];
         string content;
         // Read the whole file into the buffer.
-        // printf("Read the whole file into the buffer.\n");
-        // printf("%s\n", content.c_str());
+    
         getline(ifstream(filename), content, '\0');
-        // printf("Finish Read the whole file into the buffer.\n");
-		// ifstream readfile(filename);
-		// ostringstream tmp;
-		// tmp << readfile.rdbuf();
-		// content = tmp.str();
 
         vector <KeyVal> KVA = Map(filename, content);
 		
@@ -178,7 +169,7 @@ void Worker::doMap(int index, const vector<string>& readfiles)
 
 	for (unsigned int i = 0; i < REDUCER_COUNT; i++)
 	{
-		string filename = this->basedir + "mr-" + to_string(index) + '-' + to_string(i);
+		string filename = "mr-" + to_string(index) + '-' + to_string(i);
 		write[i].open(filename.c_str(), ios::out);
 		if (!write[i].is_open()) {
 			fprintf(stderr, "worker: file %s not open\n", filename.data());
@@ -187,15 +178,12 @@ void Worker::doMap(int index, const vector<string>& readfiles)
 	};
 
 	vector <string> contents(REDUCER_COUNT);
-	for (unsigned int i = 0; i < intermediate.size(); i++)
-	{
+	for (unsigned int i = 0; i < intermediate.size(); i++) {
 		int reduce = string2reduce(intermediate[i].key);
 		contents[reduce] += intermediate[i].key + ' ' + intermediate[i].val + '\n';
-		// fprintf(write[reduce], "%s %s\n", intermediate[i].key.data(), intermediate[i].val.data());
 	};
 
-	for (unsigned int i = 0; i < REDUCER_COUNT; i++)
-	{
+	for (unsigned int i = 0; i < REDUCER_COUNT; i++) {
 		write[i] << contents[i];
 		write[i].close();		
 	}
@@ -206,13 +194,11 @@ void Worker::doMap(int index, const vector<string>& readfiles)
 void Worker::doReduce(int index, const vector<string>& readfiles)
 {
 	fprintf(stderr, "worker: get REDUCE task %d\n", index);
-	working = true;
 	// Lab2: Your code goes here.
 	unordered_map<string, uint64_t> intermediate;
 
 	for (unsigned int i = 0; i < readfiles.size(); i++) {
 		string filename = readfiles[i];
-		fprintf(stderr, "worker: filename %s workernum %d\n", filename.data(), index);
 		ifstream file(filename, ios::in);
 		if (!file.is_open()) {
 			fprintf(stderr, "worker: file %s not open\n", filename.data());
@@ -226,10 +212,7 @@ void Worker::doReduce(int index, const vector<string>& readfiles)
 		file.close();
 	};
 
-	fprintf(stderr, "worker: REDUCER %d is working\n", index);
-
-	// string filename = "mr-" + to_string(index);
-	string filename = this->basedir + "mr-out";
+	string filename = "mr-out";
 	
 	unordered_map<string, uint64_t>::iterator iter = intermediate.begin();
 	string content = "";
@@ -238,7 +221,6 @@ void Worker::doReduce(int index, const vector<string>& readfiles)
 		iter++;
 	};
 
-	fprintf(stderr, "worker: REDUCER %d nearly finish\n", index);
 	ofstream write(filename.c_str(), ios::out | ios::app);
 	if (!write.is_open()) {
 		fprintf(stderr, "worker: file %s not open\n", filename.data());
@@ -250,28 +232,6 @@ void Worker::doReduce(int index, const vector<string>& readfiles)
 	return;
 }
 
-// void Worker::doSummary (int index, const vector<string> &readfiles) 
-// {
-// 	fprintf(stderr, "worker: get SUMMARY task %d\n", index);
-// 	working = true;
-
-// 	string contents = "";
-// 	for (unsigned int i = 0; i < readfiles.size(); i++)
-// 	{
-// 		string filename = readfiles[i];
-// 		string content;
-// 		getline(ifstream(filename), content, '\0');
-
-// 		contents += content;
-// 	};
-	
-// 	string filename = "mr-out";
-// 	ofstream write(filename.c_str(), ios::out | ios::trunc);
-// 	write << contents;
-// 	write.close();
-// 	return;
-// }
-
 void Worker::doSubmit(mr_tasktype taskType, int index)
 {
 	bool b;
@@ -280,7 +240,6 @@ void Worker::doSubmit(mr_tasktype taskType, int index)
 		fprintf(stderr, "submit task failed\n");
 		exit(-1);
 	};
-	working = false;
 }
 
 void Worker::doWork()
@@ -294,8 +253,6 @@ void Worker::doWork()
 		// if mr_tasktype::REDUCE, then doReduce and doSubmit
 		// if mr_tasktype::NONE, meaning currently no work is needed, then sleep
 		//
-		// if (working) continue;
-
 		mr_protocol::AskTaskResponse reply;
 		int d;
 		mr_protocol::status ret = this->cl->call(mr_protocol::asktask, d, reply);
@@ -306,12 +263,7 @@ void Worker::doWork()
 			} else if (reply.taskType == REDUCE) {
 				doReduce(reply.index, reply.readfiles);
 				doSubmit(reply.taskType, reply.index);
-			} 
-			// else if (reply.taskType == SUMMARY) {
-			// 	doSummary(reply.index, reply.readfiles);
-			// 	doSubmit(reply.taskType, reply.index);
-			// } 
-			else if (reply.taskType == NONE) {
+			} else if (reply.taskType == NONE) {
 				fprintf(stderr, "worker: reveive no task\n");
 				sleep(1);
 			};
