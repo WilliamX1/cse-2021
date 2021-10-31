@@ -14,181 +14,145 @@
 using namespace std;
 
 struct Task {
-	int taskType;     // should be either Mapper or Reducer
-	bool isAssigned;  // has been assigned to a worker
-	bool isCompleted; // has been finised by a worker
-	int index;        // index to the file
+    int taskType;     // should be either Mapper or Reducer
+    bool isAssigned;  // has been assigned to a worker
+    bool isCompleted; // has been finised by a worker
+    int index;        // index to the file
 };
 
 class Coordinator {
 public:
-	Coordinator(const vector<string> &files, int nReduce);
-	mr_protocol::status askTask(int d, mr_protocol::AskTaskResponse& reply);
-	mr_protocol::status submitTask(int taskType, int index, bool &success);
-	bool isFinishedMap();
-	bool isFinishedReduce();
-	bool assignTask(Task& task);
-	bool Done();
+    Coordinator(const vector <string> &files, int nReduce);
+
+    mr_protocol::status askTask(int, mr_protocol::AskTaskResponse &reply);
+
+    mr_protocol::status submitTask(int taskType, int index, bool &success);
+
+    bool isFinishedMap();
+
+    bool isFinishedReduce();
+
+    bool Done();
+
+    bool assignTask(Task &task);
 
 private:
-	vector<string> files;
-	vector<Task> mapTasks;
-	vector<Task> reduceTasks;
+    vector <string> files;
+    vector <Task> mapTasks;
+    vector <Task> reduceTasks;
 
-	mutex mtx;
+    mutex mtx;
 
-	long completedMapCount;
-	long completedReduceCount;
-	bool isFinished;
-	bool isSummary;
+    long completedMapCount;
+    long completedReduceCount;
+    bool isFinished;
 
-	static long inc; /* 用作文件后缀，只增不减 */
-	
-	string getFile(int index);
+    string getFile(int index);
 };
 
 
 // Your code here -- RPC handlers for the worker to call.
 
-mr_protocol::status Coordinator::askTask(int d, mr_protocol::AskTaskResponse& reply) {
-	// Lab2 : Your code goes here.
-	/* 文件命名方式为 mr-X-Y，X 代表 mapTasks 的 index，Y 代表散列后应该被分到 reduceTask 的 index */
-	
-	Task task;
+mr_protocol::status Coordinator::askTask(int, mr_protocol::AskTaskResponse &reply) {
+    // Lab2 : Your code goes here.
+    Task availableTask;
+    if (assignTask(availableTask)) {
+        reply.index = availableTask.index;
+        reply.tasktype = (mr_tasktype) availableTask.taskType;
+        reply.filename = getFile(reply.index);
+        reply.nfiles = files.size();
+        cout << "coordinator: assign file " << reply.filename << " to worker" << endl;
+    } else {
+        cout << "coordinator: no available tasks " << endl;
+        reply.index = -1;
+        reply.tasktype = NONE;
+        reply.filename = "";
+    }
 
-	// this->mtx.lock();
-	/* 优先分配 mapTask */
-	if (assignTask(task)) {
-		reply.index = task.index;
-		reply.taskType = (mr_tasktype) task.taskType;
-		if (reply.taskType == MAP) {
-			reply.readfiles.push_back(getFile(reply.index));
-		} else if (reply.taskType == REDUCE) {
-			for (unsigned int j = 0; j < mapTasks.size(); j++)
-			{
-				string readfile = "mr-" + to_string(mapTasks[j].index) + '-' + to_string(reply.index);
-				reply.readfiles.push_back(readfile);
-			};
-		} 
-		// else {
-		// 	for (unsigned int j = 0; j < mapTasks.size(); j++)
-		// 	{
-		// 		string readfile = "mr-" + to_string(mapTasks[j].index);
-		// 		reply.readfiles.push_back(readfile);
-		// 	};
-		// };
-		fprintf(stderr, "coordinator: assign %ld files to worker %d\n", reply.readfiles.size(), reply.index);
-	} else {
-		fprintf(stderr, "coordinator: no available tasks\n");
-		reply.index = -1;
-		reply.taskType = NONE;
-		reply.readfiles.clear();
-	};
-	return mr_protocol::OK;
+    return mr_protocol::OK;
 }
 
 mr_protocol::status Coordinator::submitTask(int taskType, int index, bool &success) {
-	// Lab2 : Your code goes here.
-	this->mtx.lock();
-
-	success = false;
-
-	if (taskType == NONE) {}
-
-	else if (taskType == MAP) {
-		for (unsigned int i = 0; i < mapTasks.size(); i++) {
-			if (mapTasks[i].index == index) {
-				mapTasks[i].isCompleted = true;
-				this->completedMapCount++;
-				fprintf(stderr, "coordinator: MAP task %d finish!\n", index);
-				break;
-			};
-		};
-	}
-
-	else if (taskType == REDUCE) {
-		for (unsigned int i = 0; i < reduceTasks.size(); i++) {
-			if (reduceTasks[i].index == index) {
-				reduceTasks[i].isCompleted = true;
-				this->completedReduceCount++;
-				fprintf(stderr, "coordinator: REDUCE task index: %d finish!\n", index);
-				break;
-			};
-		};
-	}
-
-	// else if (taskType == SUMMARY) {
-	// 	isFinished = true;
-	// 	fprintf(stderr, "coordinator: SUMMARY task finish!\n");
-	// }
-
-
-	success = true;
-
-	this->mtx.unlock();
-	return mr_protocol::OK;
+    // Lab2 : Your code goes here.
+    mtx.lock();
+    switch (taskType) {
+        case MAP:
+            cout << "A worker is trying to submit a map task with id: " << index << endl;
+            mapTasks[index].isCompleted = true;
+            mapTasks[index].isAssigned = false;
+            this->completedMapCount++;
+            break;
+        case REDUCE:
+            reduceTasks[index].isCompleted = true;
+            reduceTasks[index].isAssigned = false;
+            this->completedReduceCount++;
+            break;
+        default:
+            break;
+    }
+    if (this->completedMapCount >= (long) mapTasks.size() && this->completedReduceCount >= (long) reduceTasks.size()) {
+        this->isFinished = true;
+    }
+    mtx.unlock();
+    success = true;
+    cout << "coordinator: submit succeeded" << endl;
+    return mr_protocol::OK;
 }
 
-bool Coordinator::assignTask(Task& task) {
-	task.taskType = NONE;
-	bool found = false;
-	this->mtx.lock();
-	if (this->completedMapCount < long(this->mapTasks.size())) {
-		for (unsigned int i = 0; i < this->mapTasks.size(); i++) {
-			Task& thisTask = this->mapTasks[i];
-			if (!thisTask.isCompleted && !thisTask.isAssigned) {
-				task = thisTask;
-				thisTask.isAssigned = true;
-				found = true;
-				break;
-			};
-		};
-	} else if (this->completedReduceCount < long(this->reduceTasks.size())){
-		for (unsigned int i = 0; i < this->reduceTasks.size(); i++) {
-			Task& thisTask = this->reduceTasks[i];
-			if (!thisTask.isCompleted && !thisTask.isAssigned) {
-				task = thisTask;
-				thisTask.isAssigned = true;
-				found = true;
-				break;
-			};
-		};
-	} 
-	// else if (!this->isSummary) {
-	// 	this->isSummary = true;
-	// 	task.index = 0;
-	// 	task.taskType = SUMMARY;
-	// 	found = true;
-	// };
-	this->mtx.unlock();
-	return found;
+bool Coordinator::assignTask(Task &task) {
+    task.taskType = NONE;
+    bool found = false;
+    this->mtx.lock();
+    if (this->completedMapCount < long(this->mapTasks.size())) {
+        for (int i = 0; i < (int) this->mapTasks.size(); ++i) {
+            Task &thisTask = this->mapTasks[i];
+            if (!thisTask.isCompleted && !thisTask.isAssigned) {
+                task = thisTask;
+                thisTask.isAssigned = true;
+                found = true;
+                break;
+            }
+        }
+    } else {
+        for (int i = 0; i < (int) this->reduceTasks.size(); ++i) {
+            Task &thisTask = this->reduceTasks[i];
+            if (!thisTask.isCompleted && !thisTask.isAssigned) {
+                task = thisTask;
+                thisTask.isAssigned = true;
+                found = true;
+                break;
+            }
+        }
+    }
+    this->mtx.unlock();
+    return found;
 }
 
 string Coordinator::getFile(int index) {
-	this->mtx.lock();
-	string file = this->files[index];
-	this->mtx.unlock();
-	return file;
+    this->mtx.lock();
+    string file = this->files[index];
+    this->mtx.unlock();
+    return file;
 }
 
 bool Coordinator::isFinishedMap() {
-	bool isFinished = false;
-	this->mtx.lock();
-	if (this->completedMapCount >= long(this->mapTasks.size())) {
-		isFinished = true;
-	}
-	this->mtx.unlock();
-	return isFinished;
+    bool isFinished = false;
+    this->mtx.lock();
+    if (this->completedMapCount >= long(this->mapTasks.size())) {
+        isFinished = true;
+    }
+    this->mtx.unlock();
+    return isFinished;
 }
 
 bool Coordinator::isFinishedReduce() {
-	bool isFinished = false;
-	this->mtx.lock();
-	if (this->completedReduceCount >= long(this->reduceTasks.size())) {
-		isFinished = true;
-	}
-	this->mtx.unlock();
-	return isFinished;
+    bool isFinished = false;
+    this->mtx.lock();
+    if (this->completedReduceCount >= long(this->reduceTasks.size())) {
+        isFinished = true;
+    }
+    this->mtx.unlock();
+    return isFinished;
 }
 
 //
@@ -196,73 +160,70 @@ bool Coordinator::isFinishedReduce() {
 // if the entire job has finished.
 //
 bool Coordinator::Done() {
-	bool r = false;
-	this->mtx.lock();
-	r = this->isFinished;
-	this->mtx.unlock();
-	return r;
+    bool r = false;
+    this->mtx.lock();
+    r = this->isFinished;
+    this->mtx.unlock();
+    return r;
 }
 
 //
 // create a Coordinator.
 // nReduce is the number of reduce tasks to use.
 //
-Coordinator::Coordinator(const vector<string> &files, int nReduce)
-{
-	this->files = files;
-	this->isFinished = false;
-	this->completedMapCount = 0;
-	this->completedReduceCount = 0;
-	this->isSummary = false;
+Coordinator::Coordinator(const vector <string> &files, int nReduce) {
+    this->files = files;
+    this->isFinished = false;
+    this->completedMapCount = 0;
+    this->completedReduceCount = 0;
 
-	int filesize = files.size();
-	for (int i = 0; i < filesize; i++) {
-		this->mapTasks.push_back(Task{mr_tasktype::MAP, false, false, i});
-	}
-	for (int i = 0; i < nReduce; i++) {
-		this->reduceTasks.push_back(Task{mr_tasktype::REDUCE, false, false, i});
-	}
+    int filesize = files.size();
+    for (int i = 0; i < filesize; i++) {
+        this->mapTasks.push_back(Task{mr_tasktype::MAP, false, false, i});
+    }
+    for (int i = 0; i < nReduce; i++) {
+        this->reduceTasks.push_back(Task{mr_tasktype::REDUCE, false, false, i});
+    }
 }
 
-int main(int argc, char *argv[])
-{
-	int count = 0;
+int main(int argc, char *argv[]) {
+    int count = 0;
 
-	if(argc < 3){
-		fprintf(stderr, "Usage: %s <port-listen> <inputfiles>...\n", argv[0]);
-		exit(1);
-	}
-	char *port_listen = argv[1];
-	
-	setvbuf(stdout, NULL, _IONBF, 0);
+    if (argc < 3) {
+        fprintf(stderr, "Usage: %s <port-listen> <inputfiles>...\n", argv[0]);
+        exit(1);
+    }
+    char *port_listen = argv[1];
 
-	char *count_env = getenv("RPC_COUNT");
-	if(count_env != NULL){
-		count = atoi(count_env);
-	}
+    setvbuf(stdout, NULL, _IONBF, 0);
 
-	vector<string> files;
-	char **p = &argv[2];
-	while (*p) {
-		files.push_back(string(*p));
-		++p;
-	}
+    char *count_env = getenv("RPC_COUNT");
+    if (count_env != NULL) {
+        count = atoi(count_env);
+    }
 
-	rpcs server(atoi(port_listen), count);
+    vector <string> files;
+    char **p = &argv[2];
+    while (*p) {
+        files.push_back(string(*p));
+        ++p;
+    }
 
-	Coordinator c(files, REDUCER_COUNT);
-	
-	//
-	// Lab2: Your code here.
-	// Hints: Register "askTask" and "submitTask" as RPC handlers here
-	// 
-	server.reg(mr_protocol::asktask, &c, &Coordinator::askTask);
-	server.reg(mr_protocol::submittask, &c, &Coordinator::submitTask);
-	while(!c.Done()) {
-		sleep(1);
-	}
+    rpcs server(atoi(port_listen), count);
 
-	return 0;
+    Coordinator c(files, REDUCER_COUNT);
+
+    //
+    // Lab2: Your code here.
+    // Hints: Register "askTask" and "submitTask" as RPC handlers here
+    //
+    server.reg(mr_protocol::asktask, &c, &Coordinator::askTask);
+    server.reg(mr_protocol::submittask, &c, &Coordinator::submitTask);
+
+    while (!c.Done()) {
+        sleep(1);
+    }
+
+    return 0;
 }
-
 

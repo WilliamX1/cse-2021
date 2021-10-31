@@ -16,6 +16,7 @@
         "__locale": "cpp",
         "__threading_support": "cpp",
         "memory": "cpp",
-        "ios": "cpp"
+        "ios": "cpp",
+        "__node_handle": "cpp"
     }
 }
