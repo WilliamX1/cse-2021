@@ -1,4 +1,4 @@
-LAB=2
+LAB=3
 SOL=0
 RPC=./rpc
 LAB1GE=$(shell expr $(LAB) \>\= 1)
@@ -35,6 +35,7 @@ CXX = g++
 lab:  lab$(LAB)
 lab1: part1_tester chfs_client
 lab2: chfs_client extent_server test-lab2-part1-g mr_coordinator mr_worker mr_sequential
+lab3: raft_test
 
 rpclib=rpc/rpc.cc rpc/connection.cc rpc/pollmgr.cc rpc/thr_pool.cc rpc/jsl_log.cc gettime.cc
 rpc/librpc.a: $(patsubst %.cc,%.o,$(rpclib))
@@ -68,6 +69,9 @@ mr_coordinator : $(patsubst %.cc,%.o,$(mr_coordinator)) rpc/$(RPCLIB)
 mr_worker=mr_worker.cc
 mr_worker : $(patsubst %.cc,%.o,$(mr_worker)) rpc/$(RPCLIB)
 
+raft_test=raft_state_machine.cc raft_protocol.cc raft_test_utils.cc raft_test.cc
+raft_test : $(patsubst %.cc,%.o,$(raft_test)) rpc/$(RPCLIB)
+
 %.o: %.cc
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
@@ -80,7 +84,7 @@ fuse.o: fuse.cc
 -include *.d
 -include rpc/*.d
 
-clean_files=rpc/rpctest rpc/*.o rpc/*.d *.o *.d chfs_client extent_server rpctest test-lab2-part1-a test-lab2-part1-b test-lab2-part1-c test-lab2-part1-g part1_tester demo_client demo_server mr_coordinator mr_worker mr_sequential rpc/$(RPCLIB)
+clean_files=rpc/rpctest rpc/*.o rpc/*.d *.o *.d chfs_client extent_server rpctest test-lab2-part1-a test-lab2-part1-b test-lab2-part1-c test-lab2-part1-g part1_tester demo_client demo_server mr_coordinator mr_worker mr_sequential raft_test raft_temp rpc/$(RPCLIB)
 .PHONY: clean handin
 clean: 
 	rm $(clean_files) -rf 
@@ -90,7 +94,7 @@ handin_file=lab$(LAB).tgz
 labdir=$(shell basename $(PWD))
 handin: 
 	@bash -c "cd ../; tar -X <(tr ' ' '\n' < <(echo '$(handin_ignore)')) -czvf $(handin_file) $(labdir); mv $(handin_file) $(labdir); cd $(labdir)"
-	@echo Please modify lab2.tgz to lab2_[your student id].tgz and upload it to Canvas
+	@echo Please modify lab3.tgz to lab3_[your student id].tgz and upload it to Canvas
 	@echo Thanks!
 
 rpcdemo: demo_server demo_client

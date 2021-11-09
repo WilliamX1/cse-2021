@@ -7,6 +7,7 @@
 #include <map>
 #include <stdio.h>
 #include <unistd.h>
+#include <atomic>
 
 #include "thr_pool.h"
 #include "marshall.h"
@@ -26,6 +27,7 @@ class rpc_const {
 		static const int oldsrv_failure = -5;
 		static const int bind_failure = -6;
 		static const int cancel_failure = -7;
+		static const int unreachable_failure = -8;
 };
 
 // rpc client endpoint.
@@ -51,7 +53,7 @@ class rpcc : public chanmgr {
 		void get_refconn(connection **ch);
 		void update_xid_rep(unsigned int xid);
 
-
+		std::atomic_int _count;
 		sockaddr_in dst_;
 		unsigned int clt_nonce_;
 		unsigned int srv_nonce_;
@@ -98,10 +100,13 @@ class rpcc : public chanmgr {
 		int bind(TO to = to_max);
 
 		void set_reachable(bool r) { reachable_ = r; }
+		bool reachable() const {return reachable_;}
 
 		void cancel();
                 
                 int islossy() { return lossytest_ > 0; }
+
+		int count() const {return _count.load();}
 
 		int call1(unsigned int proc, 
 				marshall &req, unmarshall &rep, TO to);
@@ -145,6 +150,7 @@ template<class R> int
 rpcc::call_m(unsigned int proc, marshall &req, R & r, TO to) 
 {
 	unmarshall u;
+	_count.fetch_add(1);
 	int intret = call1(proc, req, u, to);
 	if (intret < 0) return intret;
 	u >> r;
@@ -319,6 +325,7 @@ class rpcs : public chanmgr {
 
 	int lossytest_; 
 	bool reachable_;
+	bool reliable_;
 
 	// map proc # to function
 	std::map<int, handler *> procs_;
@@ -352,10 +359,20 @@ class rpcs : public chanmgr {
 	//RPC handler for clients binding
 	int rpcbind(int a, int &r);
 
+	int port() const { return port_;};
+
 	void set_reachable(bool r) { reachable_ = r; }
+
+	bool reachable() const {return reachable_;}
+
+	void set_reliable(bool r) {reliable_ = r;}
+
+	bool reliable() const {return reliable_;}
 
 	bool got_pdu(connection *c, char *b, int sz);
 
+	void unreg_all();
+	
 	// register a handler
 	template<class S, class A1, class R>
 		void reg(unsigned int proc, S*, int (S::*meth)(const A1 a1, R & r));

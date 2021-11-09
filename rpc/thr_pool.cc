@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include "lang/verify.h"
+#include <unistd.h>
 
 static void *
 do_worker(void *arg)
@@ -25,7 +26,7 @@ ThrPool::ThrPool(int sz, bool blocking)
 {
 	pthread_attr_init(&attr_);
 	pthread_attr_setstacksize(&attr_, 128<<10);
-
+	stopped = false;
 	for (int i = 0; i < sz; i++) {
 		pthread_t t;
 		VERIFY(pthread_create(&t, &attr_, do_worker, (void *)this) ==0);
@@ -37,17 +38,7 @@ ThrPool::ThrPool(int sz, bool blocking)
 //will ever use this thread pool again or is currently blocking on it
 ThrPool::~ThrPool()
 {
-	for (int i = 0; i < nthreads_; i++) {
-		job_t j;
-		j.f = (void *(*)(void *))NULL; //poison pill to tell worker threads to exit
-		jobq_.enq(j);
-	}
-
-	for (int i = 0; i < nthreads_; i++) {
-		VERIFY(pthread_join(th_[i], NULL)==0);
-	}
-
-	VERIFY(pthread_attr_destroy(&attr_)==0);
+	destroy();
 }
 
 bool 
@@ -67,3 +58,21 @@ ThrPool::takeJob(job_t *j)
 	return (j->f!=NULL);
 }
 
+void
+ThrPool::destroy()
+{
+	if (stopped) return;
+	jobq_.clear();
+	for (int i = 0; i < nthreads_; i++) {
+		job_t j;
+		j.f = (void *(*)(void *))NULL; //poison pill to tell worker threads to exit
+		jobq_.enq(j);
+	}
+
+	for (int i = 0; i < nthreads_; i++) {
+		VERIFY(pthread_join(th_[i], NULL)==0);
+	}
+
+	VERIFY(pthread_attr_destroy(&attr_)==0);
+	stopped = true;
+}

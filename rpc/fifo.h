@@ -20,7 +20,8 @@ class fifo {
 		bool enq(T, bool blocking=true);
 		void deq(T *);
 		bool size();
-
+		bool empty();
+		void clear();
 	private:
 		std::list<T> q_;
 		pthread_mutex_t m_;
@@ -51,6 +52,24 @@ fifo<T>::size()
 {
 	ScopedLock ml(&m_);
 	return q_.size();
+}
+
+template<class T> bool
+fifo<T>::empty()
+{
+	ScopedLock ml(&m_);
+	return q_.empty();
+}
+
+template<class T> void
+fifo<T>::clear()
+{
+	ScopedLock ml(&m_);
+	q_.clear();
+	if (max_ && q_.size() < max_) {
+		VERIFY(pthread_cond_signal(&has_space_c_)==0);
+	}
+	return;
 }
 
 template<class T> bool

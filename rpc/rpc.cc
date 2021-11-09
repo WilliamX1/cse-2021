@@ -74,7 +74,7 @@
 #include "gettime.h"
 #include "lang/verify.h"
 
-const rpcc::TO rpcc::to_max = { 120000 };
+const rpcc::TO rpcc::to_max = { 10000 };
 const rpcc::TO rpcc::to_min = { 1000 };
 
 rpcc::caller::caller(unsigned int xxid, unmarshall *xun)
@@ -99,7 +99,7 @@ void set_rand_seed()
 }
 
 rpcc::rpcc(sockaddr_in d, bool retrans) : 
-	dst_(d), srv_nonce_(0), bind_done_(false), xid_(1), lossytest_(0), 
+	_count(0), dst_(d), srv_nonce_(0), bind_done_(false), xid_(1), lossytest_(0), 
 	retrans_(retrans), reachable_(true), chan_(NULL), destroy_wait_ (false), xid_rep_done_(-1)
 {
 	VERIFY(pthread_mutex_init(&m_, 0) == 0);
@@ -164,7 +164,7 @@ void
 rpcc::cancel(void)
 {
   ScopedLock ml(&m_);
-  printf("rpcc::cancel: force callers to fail\n");
+  jsl_log(JSL_DBG_2, "rpcc::cancel: force callers to fail\n");
   std::map<int,caller*>::iterator it;
   for(it = calls_.begin(); it != calls_.end(); it++){
     caller *ca = it->second;
@@ -182,13 +182,14 @@ rpcc::cancel(void)
     destroy_wait_ = true;
     VERIFY(pthread_cond_wait(&destroy_wait_c_,&m_) == 0);
   }
-  printf("rpcc::cancel: done\n");
+  jsl_log(JSL_DBG_2, "rpcc::cancel: done\n");
 }
 
 int
 rpcc::call1(unsigned int proc, marshall &req, unmarshall &rep,
 		TO to)
 {
+	if (!reachable_) return rpc_const::unreachable_failure;
 
 	caller ca(0, &rep);
         int xid_rep;
@@ -412,7 +413,7 @@ compress:
 
 
 rpcs::rpcs(unsigned int p1, int count)
-  : port_(p1), counting_(count), curr_counts_(count), lossytest_(0), reachable_ (true)
+  : port_(p1), counting_(count), curr_counts_(count), lossytest_(0), reachable_ (true), reliable_(true)
 {
 	VERIFY(pthread_mutex_init(&procs_m_, 0) == 0);
 	VERIFY(pthread_mutex_init(&count_m_, 0) == 0);
@@ -432,6 +433,9 @@ rpcs::rpcs(unsigned int p1, int count)
 	dispatchpool_ = new ThrPool(10,false);
 
 	listener_ = new tcpsconn(this, port_, lossytest_);
+	if (port_ == 0) {
+		port_ = listener_->port();
+	}
 }
 
 rpcs::~rpcs()
@@ -445,15 +449,15 @@ rpcs::~rpcs()
 bool
 rpcs::got_pdu(connection *c, char *b, int sz)
 {
-        if(!reachable_){
-            jsl_log(JSL_DBG_1, "rpcss::got_pdu: not reachable\n");
-            return true;
-        }
+	// if(!reachable_){
+	// 	jsl_log(JSL_DBG_1, "rpcss::got_pdu: not reachable\n");
+	// 	return true;
+	// }
 
 	djob_t *j = new djob_t(c, b, sz);
 	c->incref();
 	bool succ = dispatchpool_->addObjJob(this, &rpcs::dispatch, j);
-	if(!succ || !reachable_){
+	if(!succ){
 		c->decref();
 		delete j;
 	}
@@ -467,6 +471,16 @@ rpcs::reg1(unsigned int proc, handler *h)
 	VERIFY(procs_.count(proc) == 0);
 	procs_[proc] = h;
 	VERIFY(procs_.count(proc) >= 1);
+}
+
+void
+rpcs::unreg_all()
+{
+	ScopedLock pl(&procs_m_);
+	handler* temp = procs_[rpc_const::bind];
+	procs_.clear(); // FIXME: memory leak?
+	procs_[rpc_const::bind] = temp;
+	// reg(rpc_const::bind, this, &rpcs::rpcbind);
 }
 
 void
@@ -522,6 +536,15 @@ rpcs::dispatch(djob_t *j)
 	marshall rep;
 	reply_header rh(h.xid,0);
 
+	if (!reachable_ && proc != rpc_const::bind) { // for debug and test
+		jsl_log(JSL_DBG_2,
+				"rpcs::dispatch: the server is not reachable now\n");
+		rh.ret = rpc_const::unreachable_failure;
+		rep.pack_reply_header(rh);
+		c->send(rep.cstr(),rep.size());
+		return;
+	}
+
 	// is client sending to an old instance of server?
 	if(h.srv_nonce != 0 && h.srv_nonce != nonce_){
 		jsl_log(JSL_DBG_2,
@@ -533,6 +556,23 @@ rpcs::dispatch(djob_t *j)
 		return;
 	}
 
+	if (!reliable_) { // for raft test
+		int delay = rand() % 27;
+		usleep(delay * 1000);
+	}
+
+	if (!reliable_ && proc != rpc_const::bind) { // for raft test
+		bool drop = rand() % 1000 < 100;
+		if (drop) {
+			jsl_log(JSL_DBG_2,
+				"rpcs::dispatch: false timeout\n");
+			rh.ret = rpc_const::timeout_failure;
+			rep.pack_reply_header(rh);
+			c->send(rep.cstr(),rep.size());
+			return;
+		}
+	}
+
 	handler *f;
 	// is RPC proc a registered procedure?
 	{
@@ -541,7 +581,7 @@ rpcs::dispatch(djob_t *j)
 			fprintf(stderr, "rpcs::dispatch: unknown proc %x.\n",
 				proc);
 			c->decref();
-                        VERIFY(0);
+                        // VERIFY(0);
 			return;
 		}
 
@@ -592,18 +632,18 @@ rpcs::dispatch(djob_t *j)
 			}
 
 			rh.ret = f->fn(req, rep);
-                        if (rh.ret == rpc_const::unmarshal_args_failure) {
-                                fprintf(stderr, "rpcs::dispatch: failed to"
-                                       " unmarshall the arguments. You are"
-                                       " probably calling RPC 0x%x with wrong"
-                                       " types of arguments.\n", proc);
-                                VERIFY(0);
-                        }
+						if (rh.ret == rpc_const::unmarshal_args_failure) {
+								fprintf(stderr, "rpcs::dispatch: failed to"
+									" unmarshall the arguments. You are"
+									" probably calling RPC 0x%x with wrong"
+									" types of arguments.\n", proc);
+								VERIFY(0);
+						}
 			VERIFY(rh.ret >= 0);
 
 			rep.pack_reply_header(rh);
 			rep.take_buf(&b1,&sz1);
-
+			
 			jsl_log(JSL_DBG_2,
 					"rpcs::dispatch: sending and saving reply of size %d for rpc %u, proc %x ret %d, clt %u\n",
 					sz1, h.xid, proc, rh.ret, h.clt_nonce);

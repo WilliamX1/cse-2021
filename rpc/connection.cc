@@ -354,6 +354,18 @@ tcpsconn::~tcpsconn()
 	}	
 }
 
+int
+tcpsconn::port()
+{
+	struct sockaddr_in sin;
+	socklen_t len = sizeof(sin);
+	if (getsockname(tcp_, (sockaddr *)&sin, &len) < 0) {
+		perror("tcpsconn::tcpsconn getsockname:");
+		VERIFY(0);
+	}
+	return sin.sin_port;
+}
+
 void
 tcpsconn::process_accept()
 {
