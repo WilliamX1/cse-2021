@@ -738,7 +738,7 @@ void check_kv_pair(kv_raft_group* group, int k, bool succ)
             std::unique_lock<std::mutex> lock(cmd.res->mtx);
             if (!cmd.res->done) {
                 if(cmd.res->cv.wait_until(lock, std::chrono::system_clock::now() + std::chrono::milliseconds(2500)) == std::cv_status::timeout)
-                    continue;
+                    goto next_try;
             }  
             ASSERT(cmd.res->succ == succ, "Get command fails " << cmd.res->succ << " vs " << succ);
             if (succ) {
@@ -746,7 +746,7 @@ void check_kv_pair(kv_raft_group* group, int k, bool succ)
                 ASSERT(cmd.res->value == ans_val, "Wrong value");
             }
         }
-
+        return;
         next_try:
             mssleep(200);
     }
