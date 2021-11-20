@@ -32,7 +32,11 @@ wait $pid
 # since workers are required to exit when a job is completely finished,
 # and not before, that means the job has finished.
 sort mr-out* | grep . > mr-wc-all
-if cmp mr-wc-all ../novels/mr-wc-correct
+sort ../novels/mr-wc-correct > ../novels/lcoal-mr-wc-correct # in case of WSL
+which tofrodos >> /dev/null || sudo apt-get install tofrodos # in case of UNIX/DOS encoding
+find ../novels -type f -exec fromdos {} \;
+
+if cmp mr-wc-all ../novels/lcoal-mr-wc-correct
 then
 	echo "Passed mr-wc-distributed test."
 else

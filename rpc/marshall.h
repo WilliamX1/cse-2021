@@ -12,6 +12,7 @@
 #include <inttypes.h>
 #include "lang/verify.h"
 #include "lang/algorithm.h"
+// #include "mr_protocol.h"
 
 struct req_header {
 	req_header(int x=0, int p=0, int c = 0, int s = 0, int xi = 0):
@@ -124,6 +125,7 @@ marshall& operator<<(marshall &, unsigned short);
 marshall& operator<<(marshall &, short);
 marshall& operator<<(marshall &, unsigned long long);
 marshall& operator<<(marshall &, const std::string &);
+// marshall& operator<<(marshall &, const mr_protocol::AskTaskResponse); 
 
 class unmarshall {
 	private:
@@ -207,6 +209,7 @@ unmarshall& operator>>(unmarshall &, unsigned int &);
 unmarshall& operator>>(unmarshall &, int &);
 unmarshall& operator>>(unmarshall &, unsigned long long &);
 unmarshall& operator>>(unmarshall &, std::string &);
+// unmarshall& operator>>(unmarshall &, struct mr_protocol::AskTaskResponse &);
 
 template <class C> marshall &
 operator<<(marshall &m, std::vector<C> v)
@@ -257,5 +260,43 @@ operator>>(unmarshall &u, std::map<A,B> &d) {
 	}
 	return u;
 }
+
+// marshall &
+// operator<<(marshall &m, const mr_protocol::AskTaskResponse a) {
+// 	m << (int) a.taskType;
+// 	m << (int) a.index;
+// 	m << (unsigned int) a.readfiles.size();
+// 	for (unsigned int i = 0; i < a.readfiles.size(); i++)
+// 		m << a.readfiles[i];
+// 	return m;
+// }
+
+// unmarshall &
+// operator>>(unmarshall &u, mr_protocol::AskTaskResponse &a) {
+
+// 	a.taskType = NONE;
+// 	a.index = 0;
+// 	a.readfiles.clear();
+
+// 	int taskType;
+// 	u >> taskType;
+// 	a.taskType = mr_tasktype(taskType);
+
+// 	int index;
+// 	u >> index;
+// 	a.index = index;
+
+// 	unsigned int n;
+// 	u >> n;
+
+// 	for (unsigned int i = 0; i < n; i++) {
+// 		std::string str;
+// 		u >> str;
+// 		a.readfiles.push_back(str);
+// 	}
+
+// 	return u;
+// }
+
 
 #endif
