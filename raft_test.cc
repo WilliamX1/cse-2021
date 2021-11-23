@@ -14,6 +14,7 @@ TEST_CASE(part1, leader_election, "Initial election")
     
     // 1. check whether there is exact one leader in the group
     mssleep(300); // sleep 300 ms
+
     group->check_exact_one_leader();
 
     // 2. check whether every one has the same term
@@ -26,6 +27,7 @@ TEST_CASE(part1, leader_election, "Initial election")
 
     ASSERT(term1 == term2, "inconsistent term: " << term1 << ", " << term2);
     group->check_exact_one_leader();
+// ASSERT(0, "i'm here");
     delete group;
 }
 
