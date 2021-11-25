@@ -290,6 +290,8 @@ int raft_group<state_machine, command>::num_committed(int log_idx) {
         int log_value;
         {
             std::unique_lock<std::mutex> lock(state->mtx);
+
+            fprintf(stderr, "state->store.size: %d, log_idx: %d\n", (int)state->store.size(), log_idx);
             if ((int)state->store.size() > log_idx) {
                 log_value = state->store[log_idx];
                 has_log = true;

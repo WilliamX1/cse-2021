@@ -100,9 +100,14 @@ private:
     int votedFor; /* index correponse to term number, value corresponse to candidateId, -1 for null */
     std::vector< log_entry<command> > log; /* log entries; each entry contains command for state machine, and term when entry was received by leader */
     int commitIndex; /* index of highest log entry known to be committed, init to 0, start from 1 */
+    int lastApplied; /* index of highest log entry applied to state machine, init to 0, start from 1 */
 
     long long election_timer; /* update it to current time whenever get a rpc request or response, init to current time */
-    std::vector< bool > culculateVote; /* 0 for not response, -1 for not support, 1 for support, restore whenever server become candidate, not need to init */
+    std::vector< bool > calculateVote; /* 0 for not response or not support, 1 for support, restore whenever server become candidate, not need to init */
+    std::vector< bool > calculateAppend; /* 0 for not response or fail, 1 for success, restore whenver leader send new Append to all servers, not need to init */
+
+    std::vector< int > nextIndex; /* for each server, index of the next log entry to send to that server (initialized to leader last log index + 1) */
+    std::vector< int> matchIndex; /* for each server, index of highest log entry known to be replicated on server */
 
 private:
     // RPC handlers
@@ -234,8 +239,26 @@ template<typename state_machine, typename command>
 bool raft<state_machine, command>::new_command(command cmd, int &term, int &index) {
     // Your code here:
 
-    term = current_term;
-    return true;
+    mtx.lock();
+
+    bool ret = true;
+    if (role == leader) {
+        log.push_back(log_entry<command>(cmd, current_term));
+
+        term = current_term;
+        index = log.size() - 1;
+        ret = true;
+
+        RAFT_LOG("new_command, term: %d, index: %d", term, index);
+    } else {
+        ret = false;
+    }
+
+    // term = current_term;
+
+    mtx.unlock();
+
+    return ret;
 }
 
 template<typename state_machine, typename command>
@@ -306,9 +329,9 @@ void raft<state_machine, command>::handle_request_vote_reply(int target, const r
     }
 
     else {
-        assert(target < (int) culculateVote.size());
+        assert(target < (int) calculateVote.size());
 
-        culculateVote[target] = reply.voteGranted;
+        calculateVote[target] = reply.voteGranted;
     }
 
     mtx.unlock();
@@ -325,24 +348,99 @@ int raft<state_machine, command>::append_entries(append_entries_args<command> ar
     
     mtx.lock();
 
-    if (arg.heartbeat && arg.term >= current_term) {
-        /* update timestamp first */
-        election_timer = get_current_time();
+    /* update timestamp first */
+    election_timer = get_current_time();
 
-        role = follower;
-        current_term = arg.term;
+    /* for heartbeat only */
+    if (arg.heartbeat) {
+        RAFT_LOG("heartbeat");
+        if (arg.term >= current_term) {
+            /* update timestamp first */
+            election_timer = get_current_time();
+
+            role = follower;
+            current_term = arg.term;
+
+            assert(commitIndex < (int) log.size());
+
+            commitIndex = arg.leaderCommit;
+
+            reply.term = current_term;
+            reply.success = true;
+        } else {
+            reply.term = current_term;
+            reply.success = false;
+        }
+    }
+
+    /* Reply false if term < currentTerm */
+    else if (arg.term < current_term) {
+        reply.term = current_term;
+        reply.success = false;
+    }
+
+    /* Reply false if log doesn't contain an entry at prevLogIndex whose term matches prevLogTerm */
+    // else if ((int) log.size() < arg.prevLogIndex || log[arg.prevLogIndex].term != arg.prevLogTerm) {
+    //     reply.term = current_term;
+    //     reply.success = false;
+    // }
+
+    else {
+        /* If an existing entry conflicts with a new one (same index but different terms), delete the existing entry and all that follow it */
+        int i = arg.prevLogIndex + 1;
+        while (i < (int) arg.entries.size() && i < (int) log.size()) {
+            if (arg.entries[i].term != log[i].term) break;
+            else i++;
+        };
+        while ((int) log.size() > i) {
+            log.pop_back();
+        };
+        RAFT_LOG("client: arg.entries.size: %d", (int) arg.entries.size());
+        /* Append any new entries not already in the log */
+        while (i < (int) arg.entries.size()) {
+            log.push_back(arg.entries[i]);
+            i++;
+        };
+
+        /* If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry) */
+        RAFT_LOG("arg.leaderCommit: %d, log.index: %d", arg.leaderCommit, (int) log.size() - 1);
+        if (arg.leaderCommit > commitIndex) {
+            commitIndex = std::min(arg.leaderCommit, (int) log.size() - 1);
+        };
+
+        reply.term = current_term;
+        reply.success = true;
     }
 
     mtx.unlock();
 
-    RAFT_LOG("RPC append_entries");
-    return 0;
+    RAFT_LOG("RPC append_entries, commitIndex: %d, success? : %d", commitIndex, reply.success);
+    return raft_rpc_status::OK;
 }
 
 template<typename state_machine, typename command>
 void raft<state_machine, command>::handle_append_entries_reply(int target, const append_entries_args<command>& arg, const append_entries_reply& reply) {
     // Your code here:
+
+    mtx.lock();
+
+    /* update timestamp first */
     election_timer = get_current_time();
+
+    if (reply.term > current_term) {
+        /* update current_term and become follower */
+        current_term = reply.term;
+        
+        role = follower;
+        votedFor = -1;
+    } else {
+        assert(target < (int) calculateAppend.size());
+
+        calculateAppend[target] = reply.success;
+    }
+
+    mtx.unlock();
+
     return;
 }
 
@@ -434,8 +532,8 @@ void raft<state_machine, command>::run_background_election() {
                 current_term++;
 
                 votedFor = my_id;
-                culculateVote.assign(rpc_clients.size(), false);
-                culculateVote[my_id] = true;
+                calculateVote.assign(rpc_clients.size(), false);
+                calculateVote[my_id] = true;
 
                 request_vote_args args(current_term, my_id, commitIndex, log[commitIndex].term);
                 
@@ -451,7 +549,14 @@ void raft<state_machine, command>::run_background_election() {
         case candidate:
         {
 
-            if (std::accumulate(culculateVote.begin(), culculateVote.end(), 0) > (int) rpc_clients.size() / 2) role = leader;
+            if (std::accumulate(calculateVote.begin(), calculateVote.end(), 0) > (int) rpc_clients.size() / 2) {
+                /* the leader initializes all nextIndex values to the index just after the last one in its log */
+                nextIndex.assign(rpc_clients.size(), log.size() - 1 + 1);
+                matchIndex.assign(rpc_clients.size(), 0);
+                calculateAppend.assign(rpc_clients.size(), false);
+
+                role = leader;
+            }
             else if (current_time - election_timer > timeout_candidate_election_timeout) {
                 role = follower;
 
@@ -467,12 +572,11 @@ void raft<state_machine, command>::run_background_election() {
 
         case leader:
         {
-            append_entries_args<command> args(true, current_term); /* null entry for heartbeat */
-
             for (int i = 0; i < (int) rpc_clients.size(); i++)
-                if (i != my_id)
+                if (i != my_id) {
+                    append_entries_args<command> args(true, current_term, my_id, 0, 0, std::vector< log_entry<command> >(), matchIndex[i]); /* null entry for heartbeat */
                     thread_pool->addObjJob(this, &raft::send_append_entries, i, args);
-            
+                }   
             std::this_thread::sleep_for(std::chrono::milliseconds(timeout_heartbeat));
             
             break;
@@ -495,10 +599,44 @@ void raft<state_machine, command>::run_background_commit() {
 
     // Hints: You should check the leader's last log index and the follower's next log index.        
     
+    int flag = true, size = 1;
+    append_entries_args<command> prev_arg;
+
     while (true) {
         if (is_stopped()) return;
         // Your code here:
 
+        if (role == leader) {
+            // append_entries_args<command> arg(false, current_term, my_id, log.size() - 1, log.back().term, log, commitIndex);
+            if (flag) {
+                append_entries_args<command> arg(false, current_term, my_id, 0, 0, log, commitIndex);
+                if ((int) log.size() > size) {
+                    calculateAppend.assign(rpc_clients.size(), false);
+                    calculateAppend[my_id] = true;
+
+                    prev_arg = arg;
+                    for (int i = 0; i < (int) rpc_clients.size(); i++) {
+                        if (i != my_id) {
+                            thread_pool->addObjJob(this, &raft::send_append_entries, i, arg);
+                        }
+                    }
+                    size = log.size();
+                    flag = false;
+                }
+            } else if (std::accumulate(calculateAppend.begin(), calculateAppend.end(), 0) > (int) rpc_clients.size() / 2) {
+                matchIndex[my_id] = commitIndex = size - 1;
+                for (int i = 0; i < (int) rpc_clients.size(); i++) {
+                    if (i != my_id) {
+                        matchIndex[i] = std::max(matchIndex[i], commitIndex);
+                    };
+                };
+                flag = true;
+            } else {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+        }
+
+        RAFT_LOG("CommitIndex: %d", commitIndex);
         
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }    
@@ -519,7 +657,13 @@ void raft<state_machine, command>::run_background_apply() {
         if (is_stopped()) return;
         // Your code here:
 
-        
+        if (commitIndex > lastApplied) {
+            for (int i = lastApplied + 1; i <= commitIndex; i++) {
+                state->apply_log(log[i].cmd);
+            };
+            lastApplied = commitIndex;
+        };
+
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }    
     return;

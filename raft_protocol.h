@@ -79,29 +79,42 @@ class append_entries_args {
 public:
     // Your code here
     bool heartbeat;
-    int term;
+    int term; /* leader's term */
+    int leaderId; /* so follower can redirect clients */
+    int prevLogIndex; /* index of log entry immediately preceding new ones */
+    int prevLogTerm; /* term of prevLogIndex entry */
+    std::vector< log_entry<command> > entries; /* log entries to store(empty for heartbeat; may send more than one for efficiency */
+    int leaderCommit; /* leader's commitIndex */
 
     append_entries_args() {};
     append_entries_args(bool heartbeat, int term) : heartbeat(heartbeat), term(term) {};
+    append_entries_args(bool heartbeat, int term, int leaderId, int prevLogIndex, int prevLogTerm, std::vector< log_entry<command> > entries, int leaderCommit)
+    : heartbeat(heartbeat), term(term), leaderId(leaderId), prevLogIndex(prevLogIndex), prevLogTerm(prevLogTerm), entries(entries), leaderCommit(leaderCommit) {};
 };
 
 template<typename command>
 marshall& operator<<(marshall &m, const append_entries_args<command>& args) {
     // Your code here
-    m << args.heartbeat << args.term;
+    m << args.heartbeat << args.term << args.leaderId << args.prevLogIndex << args.prevLogTerm
+        << args.entries << args.leaderCommit;
     return m;
 }
 
 template<typename command>
 unmarshall& operator>>(unmarshall &u, append_entries_args<command>& args) {
     // Your code here
-    u >> args.heartbeat >> args.term;
+    u >> args.heartbeat >> args.term >> args.leaderId >> args.prevLogIndex >> args.prevLogTerm
+        >> args.entries >> args.leaderCommit;
     return u;
 }
 
 class append_entries_reply {
 public:
     // Your code here
+    int term;
+    bool success;
+    append_entries_reply() {};
+    append_entries_reply(int term, bool success) : term(term), success(success) {};
 };
 
 marshall& operator<<(marshall &m, const append_entries_reply& reply);
