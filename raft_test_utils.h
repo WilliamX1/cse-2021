@@ -290,8 +290,7 @@ int raft_group<state_machine, command>::num_committed(int log_idx) {
         int log_value;
         {
             std::unique_lock<std::mutex> lock(state->mtx);
-
-            fprintf(stderr, "state->store.size: %d, log_idx: %d\n", (int)state->store.size(), log_idx);
+            fprintf(stderr, "apply_size: %d, log_idx: %d", (int)state->store.size(), log_idx);
             if ((int)state->store.size() > log_idx) {
                 log_value = state->store[log_idx];
                 has_log = true;
@@ -351,7 +350,7 @@ int raft_group<state_machine, command>::append_new_command(int value, int expect
             auto check_start = std::chrono::system_clock::now();
             while (std::chrono::system_clock::now() < check_start + std::chrono::seconds(2)) {
                 int committed_server = num_committed(log_idx);
-                // std::cout << "nun commited: " << committed_server << std::endl;
+                std::cout << "leader_idx: " << leader_idx << "nun commited: " << committed_server << "log_idx: " << log_idx << std::endl;
                 if (committed_server >= expected_servers) {
                     // The log is committed!
                     int commited_value = get_committed_value(log_idx);
