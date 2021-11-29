@@ -91,11 +91,11 @@ private:
     std::thread* background_apply;
 
     /* some static value */
-    const int timeout_heartbeat = 150;
+    const int timeout_heartbeat = 120;
     const int timeout_follower_election_lower = 300;
     const int timeout_follower_election_upper = 500;
     const int timeout_candidate_election_timeout = 1000;
-    const int timeout_commit = 100;
+    const int timeout_commit = 150;
 
     // Your code here:
     int votedFor; /* index correponse to term number, value corresponse to candidateId, -1 for null */
@@ -174,12 +174,17 @@ raft<state_machine, command>::raft(rpcs* server, std::vector<rpcc*> clients, int
     log = std::vector< log_entry<command> >();
     /* append a null log as the first log */
     log_entry<command> first_null_log = log_entry<command>();
-    first_null_log.term = 0;
+    first_null_log.term = first_null_log.index = 0;
     log.push_back(first_null_log);
 
+    /* init some states */
     commitIndex = 0;
     lastApplied = 0;
     election_timer = get_current_time();
+
+    /* restore metadata and logdata */
+    storage->restore_metadata(current_term, votedFor);
+    storage->restore_logdata(log);
 }
 
 template<typename state_machine, typename command>
@@ -243,8 +248,12 @@ bool raft<state_machine, command>::new_command(command cmd, int &term, int &inde
 
     mtx.lock();
 
-    if (role == leader) {
-        log.push_back(log_entry<command>(cmd, current_term));
+    if (is_leader(current_term)) {
+        log_entry<command> current_log = log_entry<command>(cmd, current_term, (int) log.size());
+        /* persist log state */
+        storage->persist_logdata(current_log);
+
+        log.push_back(current_log);
 
         term = current_term;
         index = log.size() - 1;
@@ -254,7 +263,7 @@ bool raft<state_machine, command>::new_command(command cmd, int &term, int &inde
 
     mtx.unlock();
 
-    return role == leader;
+    return is_leader(current_term);
 }
 
 template<typename state_machine, typename command>
@@ -294,6 +303,9 @@ int raft<state_machine, command>::request_vote(request_vote_args args, request_v
             reply.voteGranted = true;
 
             votedFor = args.candidateId;
+
+            /* persist metadata */
+            storage->persist_metadata(current_term, votedFor);
         }
     
     else {
@@ -322,6 +334,9 @@ void raft<state_machine, command>::handle_request_vote_reply(int target, const r
         
         role = follower;
         votedFor = -1;
+
+        /* persist metadata state: term changes */
+        storage->persist_metadata(current_term, votedFor);
     }
 
     else {
@@ -351,13 +366,14 @@ int raft<state_machine, command>::append_entries(append_entries_args<command> ar
     if (arg.heartbeat) {
         RAFT_LOG("heartbeat");
         if (arg.term >= current_term) {
-            /* update timestamp first */
-            election_timer = get_current_time();
 
             role = follower;
             current_term = arg.term;
             reply.term = current_term;
             reply.success = true;
+
+            /* persist metadata state: term changes */
+            storage->persist_metadata(current_term, votedFor);
         } else {
             reply.term = current_term;
             reply.success = false;
@@ -371,13 +387,12 @@ int raft<state_machine, command>::append_entries(append_entries_args<command> ar
     }
 
     /* Reply false if log doesn't contain an entry at prevLogIndex whose term matches prevLogTerm */
-    // else if ((int) log.size() < arg.prevLogIndex || log[arg.prevLogIndex].term != arg.prevLogTerm) {
-    //     reply.term = current_term;
-    //     reply.success = false;
-    // }
+    else if ((int) log.size() < arg.prevLogIndex || log[arg.prevLogIndex].term != arg.prevLogTerm) {
+        reply.term = current_term;
+        reply.success = false;
+    }
 
     else {
-        RAFT_LOG("++++++\n");
         /* If an existing entry conflicts with a new one (same index but different terms), delete the existing entry and all that follow it */
         int i = arg.prevLogIndex + 1;
         while (i < (int) arg.entries.size() && i < (int) log.size()) {
@@ -389,6 +404,9 @@ int raft<state_machine, command>::append_entries(append_entries_args<command> ar
         };
         /* Append any new entries not already in the log */
         while (i < (int) arg.entries.size()) {
+            /* persist log data */
+            storage->persist_logdata(arg.entries[i]);
+
             log.push_back(arg.entries[i]);
             i++;
         };
@@ -422,6 +440,9 @@ void raft<state_machine, command>::handle_append_entries_reply(int target, const
         
         role = follower;
         votedFor = -1;
+
+        /* persist metadata state: term changes */
+        storage->persist_metadata(current_term, votedFor);
     } else if (arg.heartbeat) {}
     else if (reply.success) {
         matchIndex[target] = std::max(matchIndex[target], (int) arg.entries.size() - 1);
@@ -431,6 +452,9 @@ void raft<state_machine, command>::handle_append_entries_reply(int target, const
         commitIndex = std::max(commitIndex, v[(v.size() + 1) / 2 - 1]);
 
         RAFT_LOG("~~ id: %d, commitIndex: %d", target, commitIndex);
+    } else {
+        RAFT_LOG("decrement: target: %d", target);
+        nextIndex[target] = 1;
     }
 
     mtx.unlock();
@@ -526,6 +550,10 @@ void raft<state_machine, command>::run_background_election() {
                 current_term++;
 
                 votedFor = my_id;
+
+                /* persist metadata */
+                storage->persist_metadata(current_term, votedFor);
+
                 calculateVote.assign(rpc_clients.size(), false);
                 calculateVote[my_id] = true;
 
@@ -536,6 +564,7 @@ void raft<state_machine, command>::run_background_election() {
                 for (int i = 0; i < (int) rpc_clients.size(); i++)
                     if (i != my_id)
                         thread_pool->addObjJob(this, &raft::send_request_vote, i, args);
+                
             };
             break;
         }
@@ -558,6 +587,9 @@ void raft<state_machine, command>::run_background_election() {
 
                 votedFor = -1;
                 current_term--;
+
+                /* persist metadata */
+                storage->persist_metadata(current_term, votedFor);
             }
 
             break;
@@ -589,7 +621,7 @@ void raft<state_machine, command>::run_background_commit() {
         if (is_stopped()) return;
         // Your code here:
 
-        if (role == leader) {
+        if (is_leader(current_term)) {
             matchIndex[my_id] = log.size() - 1;
             for (int i = 0; i < (int) rpc_clients.size(); i++) {
                 if (i != my_id && (int) log.size() > nextIndex[i]) {
@@ -642,7 +674,7 @@ void raft<state_machine, command>::run_background_ping() {
     while (true) {
         if (is_stopped()) return;
         // Your code here:
-        if (role == leader) {
+        if (is_leader(current_term)) {
             for (int i = 0; i < (int) rpc_clients.size(); i++)
                 if (i != my_id) {
                     append_entries_args<command> args(true, current_term, my_id, 0, 0, std::vector< log_entry<command> >(), matchIndex[i]); /* null entry for heartbeat */

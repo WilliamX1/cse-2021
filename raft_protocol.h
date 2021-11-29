@@ -53,24 +53,25 @@ public:
     // Your code here
     command cmd;
     int term;
+    int index;
 
     log_entry() {};
 
-    log_entry(command cmd, int term)
-    : cmd(cmd), term(term) {};
+    log_entry(command cmd, int term, int index)
+    : cmd(cmd), term(term), index(index) {};
 };
 
 template<typename command>
 marshall& operator<<(marshall &m, const log_entry<command>& entry) {
     // Your code here
-    m << entry.cmd << entry.term;
+    m << entry.cmd << entry.term << entry.index;
     return m;
 }
 
 template<typename command>
 unmarshall& operator>>(unmarshall &u, log_entry<command>& entry) {
     // Your code here
-    u >> entry.cmd >> entry.term;
+    u >> entry.cmd >> entry.term >> entry.index;
     return u;
 }
 

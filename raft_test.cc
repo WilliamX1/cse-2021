@@ -392,7 +392,6 @@ TEST_CASE(part2, rpc_count, "RPC counts aren't too high")
     mssleep(1000);
 
     int total3 = group->rpc_count(-1);
-    fprintf(stderr, "total3: %d, total2: %d\n", total3, total2);
     ASSERT(total3 - total2 <= 3 * 20, "too many RPCs (" << total3-total2 << ") for 1 second of idleness");
     delete group;
 }

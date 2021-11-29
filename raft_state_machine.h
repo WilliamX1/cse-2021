@@ -79,6 +79,8 @@ marshall& operator<<(marshall &m, const kv_command& cmd);
 unmarshall& operator>>(unmarshall &u, kv_command& cmd);
 
 class kv_state_machine : public raft_state_machine {
+private:
+    std::map<std::string, std::string> state;
 public:
     virtual ~kv_state_machine();
 
