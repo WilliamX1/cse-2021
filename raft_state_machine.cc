@@ -23,7 +23,7 @@ int kv_command::size() const {
 
 void kv_command::serialize(char* buf, int size) const {
     // Your code here:
-    if (size != this->size()) return;
+    if (size != this->size())  return;
     int key_size = key.size();
     int value_size = value.size();
     int pos = 0;
@@ -60,7 +60,7 @@ void kv_command::deserialize(const char* buf, int size) {
 
 marshall& operator<<(marshall &m, const kv_command& cmd) {
     // Your code here:
-    m << (int) cmd.cmd_tp << cmd.key << cmd.value;
+    m << (int)cmd.cmd_tp << cmd.key << cmd.value;
     return m;
 }
 
@@ -80,6 +80,7 @@ void kv_state_machine::apply_log(raft_command &cmd) {
     kv_command &kv_cmd = dynamic_cast<kv_command&>(cmd);
     std::unique_lock<std::mutex> lock(kv_cmd.res->mtx);
     // Your code here:
+    kv_cmd.res->done = true;
     if (kv_cmd.cmd_tp == kv_command::command_type::CMD_DEL) {
         auto it1 = state.find(kv_cmd.key);
         if (it1 != state.end()) {
@@ -124,7 +125,7 @@ void kv_state_machine::apply_log(raft_command &cmd) {
     else {
         kv_cmd.res->succ = true;
     }
-    kv_cmd.res->done = true;
+    
     kv_cmd.res->cv.notify_all();
     return;
 }

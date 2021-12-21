@@ -4,9 +4,7 @@
 #include "raft_protocol.h"
 #include <fcntl.h>
 #include <mutex>
-#include <iostream>
 #include <fstream>
-
 
 template<typename command>
 class raft_storage {
@@ -14,135 +12,84 @@ public:
     raft_storage(const std::string& file_dir);
     ~raft_storage();
     // Your code here
-    
-    /* change/persist log data when:
-     * the leader receives a new command or
-     * follower receives an append_entries RPC 
-     */
-    void persist_logdata(const log_entry<command> log);
+    int current_term;
+    int vote_for;
+    std::vector<log_entry<command>> log;
 
-    /* change/persist meta data when
-     * the term changes or
-     * the node votes for someone
-     */
-    void persist_metadata(const int currentTerm, const int votedFor);
-
-    /* restore */
-    void restore_logdata(std::vector< log_entry<command> >& log);
-
-    void restore_metadata(int& currentTerm, int& votedFor);
+    void flush();
 
 private:
     std::mutex mtx;
-    std::string file_dir;
-    std::string file_path_metadata;
-    std::string file_path_logdata;
-
+    std::string file_path;
 };
 
 template<typename command>
 raft_storage<command>::raft_storage(const std::string& dir){
     // Your code here
-    file_dir = dir;
-    file_path_metadata = file_dir + "/metadata.log";
-    file_path_logdata = file_dir + "/logdata.log";
+    file_path = dir + "/data";
+    std::ifstream in(file_path, std::ios::in | std::ios::binary);
+    if (in.is_open()) {
+        in.read((char *) &current_term, sizeof(int));
+        in.read((char *) &vote_for, sizeof(int));
+
+        int log_size;
+        in.read((char *) &log_size, sizeof(int));
+
+        log.clear();
+        for (int i = 0; i < log_size; ++i) {
+            log_entry<command> new_entry;
+            int size;
+            char *buf;
+
+            in.read((char *) &new_entry.term, sizeof(int));
+            in.read((char *) &size, sizeof(int));
+
+            buf = new char [size];
+            in.read(buf, size);
+
+            new_entry.cmd.deserialize(buf, size);
+            log.push_back(new_entry);
+            delete [] buf;
+        }
+    }
+    else {
+        current_term = 0;
+        vote_for = -1;
+        log.clear();
+    }
+    in.close();
 }
 
 template<typename command>
 raft_storage<command>::~raft_storage() {
-   // Your code here
+    // Your code here
+    flush();
 }
 
 template<typename command>
-void raft_storage<command>::persist_logdata(const log_entry<command> log) {
+void raft_storage<command>::flush() {
     mtx.lock();
-    std::ofstream logdata;
-    logdata.open(file_path_logdata, std::ios::out | std::ios::app | std::ios::binary);
-    if (logdata.is_open()) {
-        logdata.write((char*)& log.term, sizeof(int));
-        logdata.write((char*)& log.index, sizeof(int));
-        
-        int size = log.cmd.size();
-        logdata.write((char*)& size, sizeof(int));
+    std::ofstream out(file_path, std::ios::trunc | std::ios::out | std::ios::binary);
+    if (out.is_open()) {
+        out.write((char *) &current_term, sizeof(int));
+        out.write((char *) &vote_for, sizeof(int));
+        int log_size = log.size();
+        out.write((char *) &log_size, sizeof(int));
 
-        char* buf = new char[size];
-        (log.cmd).serialize(buf, size);
-        logdata.write(buf, size);
-        
-        fprintf(stderr, "persist_logdata: log.term: %d, log.index: %d, log.cmd: %d\n", log.term, log.index, log.cmd.value);
+        for (auto &it : log) {
+            int size = it.cmd.size();
+            char *buf = new char [size];
 
-        delete [] buf;
+            it.cmd.serialize(buf, size);
 
-        logdata.close();
-    };
-    mtx.unlock();
-    return;
-};
-
-template<typename command>
-void raft_storage<command>::restore_logdata(std::vector< log_entry<command> >& log) {
-    std::ifstream logdata;
-    logdata.open(file_path_logdata, std::ios::in | std::ios::binary);
-    if (logdata.is_open()) {
-        int term, index;
-        command cmd;
-
-        while (logdata.read((char*)& term, sizeof (int)) && logdata.read((char*)& index, sizeof (int))) {
-            int size;
-            char* buf;
-            
-            logdata.read((char*)& size, sizeof(int));
-            
-            buf = new char[size];
-
-            logdata.read(buf, size);
-            cmd.deserialize(buf, size);
-
-            while (index >= log.size()) log.push_back(log_entry<command>());
-            log[index] = log_entry<command>(cmd, term, index);
-
-            fprintf(stderr, "restore_logdata: log.term: %d, log.index: %d, log.cmd: %d\n", term, index, cmd.value);
+            out.write((char *) &it.term, sizeof(int));
+            out.write((char *) &size, sizeof(int));
+            out.write(buf, size);
+            delete [] buf;
         }
-
-        logdata.close();
-    };
-    return;
-};
-
-template<typename command>
-void raft_storage<command>::persist_metadata(const int currentTerm, const int votedFor) {
-    mtx.lock();
-    std::ofstream metadata;
-    metadata.open(file_path_metadata, std::ios::out | std::ios::app | std::ios::binary);
-    if (metadata.is_open()) {
-        metadata.write((char*)& currentTerm, sizeof(int));
-        metadata.write((char*)& votedFor, sizeof(int));
-
-        metadata.close();
-
-        fprintf(stderr, "persist_metadata: currentTerm: %d, votedFor: %d\n", currentTerm, votedFor);
-    };
+    }
+    out.close();
     mtx.unlock();
-    return;
-};
-
-template<typename command>
-void raft_storage<command>::restore_metadata(int& currentTerm, int& votedFor) {
-    std::ifstream metadata;
-    metadata.open(file_path_metadata, std::ios::in);
-
-    if (metadata.is_open()) {
-        while (metadata.read((char*)& currentTerm, sizeof(int)) && metadata.read((char*)& votedFor, sizeof(int))) {};
-        // metadata.seekg(sizeof (int) + sizeof (int), std::ios::end);
-        // metadata.read((char*)& currentTerm, sizeof(int));
-        // metadata.read((char*)& votedFor, sizeof(int));
-
-        metadata.close();
-
-        fprintf(stderr, "restore_metadata: currentTerm: %d, votedFor: %d\n", currentTerm, votedFor);
-    };
-
-    return;
-};
+}
 
 #endif // raft_storage_h

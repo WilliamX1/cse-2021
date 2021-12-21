@@ -28,32 +28,32 @@ marshall& operator<<(marshall &m, const append_entries_reply& reply) {
     m << reply.term << reply.success;
     return m;
 }
-unmarshall& operator>>(unmarshall &u, append_entries_reply& reply) {
+unmarshall& operator>>(unmarshall &m, append_entries_reply& reply) {
     // Your code here
-    u >> reply.term >> reply.success;
-    return u;
+    m >> reply.term >> reply.success;
+    return m;
 }
 
 marshall& operator<<(marshall &m, const install_snapshot_args& args) {
     // Your code here
-
+    m << args.term << args.leaderId << args.lastIncludedIndex << args.lastIncludedTerm << args.data;
     return m;
 }
 
 unmarshall& operator>>(unmarshall &u, install_snapshot_args& args) {
     // Your code here
-
+    u >> args.term >> args.leaderId >> args.lastIncludedIndex >> args.lastIncludedTerm >> args.data;
     return u; 
 }
 
 marshall& operator<<(marshall &m, const install_snapshot_reply& reply) {
     // Your code here
-
+    m << reply.term;
     return m;
 }
 
 unmarshall& operator>>(unmarshall &u, install_snapshot_reply& reply) {
     // Your code here
-
+    u >> reply.term;
     return u;
 }

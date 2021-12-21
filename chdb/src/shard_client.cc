@@ -3,6 +3,9 @@
 
 int shard_client::put(chdb_protocol::operation_var var, int &r) {
     // TODO: Your code here
+
+    mtx.lock();
+
     /* Store the key into primary and all other stores */
     printf("shard_client[%d] put <key, val> = <%d, %d> from tx_region[%d]\n", this->shard_id, var.key, var.value, var.tx_id);
 
@@ -15,11 +18,13 @@ int shard_client::put(chdb_protocol::operation_var var, int &r) {
             store[i][var.key] = val;
     };
     
+    mtx.unlock();
     return 0;
 }
 
 int shard_client::get(chdb_protocol::operation_var var, int &r) {
     // TODO: Your code here
+    mtx.lock();
     /* Get the key from the primary store */
     std::map< int, value_entry >::iterator iter = store[primary_replica].find(var.key);
 
@@ -30,6 +35,7 @@ int shard_client::get(chdb_protocol::operation_var var, int &r) {
         r = 0;
         printf("shard_client[%d] get <key, val> = <%d, ??> from tx_region[%d]\n", this->shard_id, var.key, var.tx_id);
     }
+    mtx.unlock();
     return 0;
 }
 

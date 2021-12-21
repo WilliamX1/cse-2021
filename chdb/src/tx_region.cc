@@ -33,7 +33,10 @@ int tx_region::tx_can_commit() {
         int key = iter->first;
         int target_shard_client_id = this->db->dispatch(key, (int) this->db->shards.size());
 
-        if (this->db->shard_id2shard(target_shard_client_id)->active == false) ret = chdb_protocol::prepare_not_ok;
+        if (this->db->shard_id2shard(target_shard_client_id)->active == false) {
+            ret = chdb_protocol::prepare_not_ok;
+            break;
+        };
 
         iter++;
     }

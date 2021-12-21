@@ -2,6 +2,8 @@
 #include "protocol.h"
 #include "chdb_state_machine.h"
 
+#include <mutex>
+
 class value_entry {
 public:
     value_entry() {}
@@ -90,4 +92,5 @@ public:
     int primary_replica = 0;
     int replica_num = 5;
 
+    std::mutex mtx;
 };

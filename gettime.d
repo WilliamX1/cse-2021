@@ -1,1 +1,0 @@
-gettime.o: gettime.cc
