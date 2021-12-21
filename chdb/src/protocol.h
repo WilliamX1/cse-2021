@@ -27,6 +27,10 @@ namespace chdb_protocol {
         int tx_id;
         int key;
         int value;
+
+        operation_var() {};
+        operation_var(int tx_id, int key, int value = 0)
+        : tx_id(tx_id), key(key), value(value) {};
     };
 
     class dummy_var {

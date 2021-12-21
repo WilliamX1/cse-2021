@@ -116,6 +116,7 @@ TEST_CASE(part1, shard_dispatch_test_target_one, "Test assigned dispatch") {
     }
     for (int idx = 0; idx < shard_num; ++idx) {
         int sz = store.shards[idx]->get_store().size();
+        // printf("idx: %d, expected size: %d, actual size: %d\n", idx, expected_distri[idx], sz);
         ASSERT(sz == expected_distri[idx], "Shard dispatch distribution into one target bad");
     }
 

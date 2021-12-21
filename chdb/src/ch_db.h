@@ -75,7 +75,8 @@ class chdb {
 public:
     chdb(const int shard_num, const int cluster_port, shard_dispatch dispatch = default_dispatch)
             : max_tx_id(0),
-              vserver(new view_server(cluster_port, dispatch)) {
+              vserver(new view_server(cluster_port, dispatch)),
+              dispatch(dispatch) {
         for (int i = 1; i <= shard_num; ++i) {
             shard_client *shard = new shard_client(i, i + cluster_port);
             vserver->add_shard_client(shard);
@@ -131,7 +132,17 @@ public:
     int max_tx_id;
     std::mutex tx_id_mtx;
 
-private:
+    shard_dispatch dispatch;
+
+    shard_client* shard_id2shard(int shard_id) {
+        for (int i = 0; i < shards.size(); i++)
+            if (shards[i]->shard_id == shard_id) 
+                return shards[i];
+        printf("Error: shard_id --> idx cannot corresponde\n");
+        return NULL;
+    }
+
+public:
     static int default_dispatch(const int key, int shard_num) {
         int shard_offset = key % shard_num;
         if (0 == shard_offset)++shard_offset;

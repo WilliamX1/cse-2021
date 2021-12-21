@@ -8,7 +8,7 @@
 #include <map>
 
 /* Macro for lab4 */
-#define RAFT_GROUP 0            /* Use raft group for view server. Enable it in part2 */
+#define RAFT_GROUP 1            /* Use raft group for view server. Enable it in part2 */
 #define BIG_LOCK 1              /* Use big lock. Please disable it to pass the last 3 (bonus) testcases */
 
 #include "../../raft_test_utils.h"

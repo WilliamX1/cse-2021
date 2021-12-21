@@ -1,5 +1,5 @@
 #include "ch_db.h"
-
+#include <map>
 
 /*
  * tx_region: chdb KV client which supports transaction concurrency control.
@@ -51,6 +51,9 @@ public:
      * Transaction part
      * ********************************************/
 private:
+    /* Used to cache key-value */
+    std::map< int, int > cache_;
+
     /**
      * Transaction begin
      * */
