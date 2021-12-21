@@ -74,7 +74,9 @@
 #include "gettime.h"
 #include "lang/verify.h"
 
-const rpcc::TO rpcc::to_max = { 10000 };
+#include "mr_protocol.h"
+
+const rpcc::TO rpcc::to_max = { 120000 };
 const rpcc::TO rpcc::to_min = { 1000 };
 
 rpcc::caller::caller(unsigned int xxid, unmarshall *xun)

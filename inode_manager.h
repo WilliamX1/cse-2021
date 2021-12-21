@@ -22,6 +22,7 @@ class disk {
   disk();
   void read_block(uint32_t id, char *buf);
   void write_block(uint32_t id, const char *buf);
+  void print_status(uint32_t id);
 };
 
 // block layer -----------------------------------------
@@ -44,6 +45,7 @@ class block_manager {
   void free_block(uint32_t id);
   void read_block(uint32_t id, char *buf);
   void write_block(uint32_t id, const char *buf);
+  void print_status();
 };
 
 // inode layer -----------------------------------------
@@ -55,7 +57,7 @@ class block_manager {
 //(BLOCK_SIZE / sizeof(struct inode))
 
 // Block containing inode i
-#define IBLOCK(i, nblocks)     ((nblocks)/BPB + (i)/IPB + 3)
+#define IBLOCK(i, nblocks)     ((nblocks)/BPB + (i)/IPB + 3)//bug?
 
 // Bitmap bits per block
 #define BPB           (BLOCK_SIZE*8)
@@ -67,6 +69,7 @@ class block_manager {
 #define NINDIRECT (BLOCK_SIZE / sizeof(uint))
 #define MAXFILE (NDIRECT + NINDIRECT)
 
+#define FILEBLOCK IBLOCK(INODE_NUM, sb.nblocks) + 1
 typedef struct inode {
   short type;
   unsigned int size;
@@ -81,6 +84,8 @@ class inode_manager {
   block_manager *bm;
   struct inode* get_inode(uint32_t inum);
   void put_inode(uint32_t inum, struct inode *ino);
+  blockid_t get_nth_blockid(inode_t *ino, uint32_t n);
+  void alloc_nth_block(inode_t *ino, uint32_t n);
 
  public:
   inode_manager();
@@ -93,4 +98,3 @@ class inode_manager {
 };
 
 #endif
-

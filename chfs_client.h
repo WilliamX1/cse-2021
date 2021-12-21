@@ -30,6 +30,11 @@ class chfs_client {
     std::string name;
     chfs_client::inum inum;
   };
+  struct dirent_n {
+    char name[BLOCK_SIZE/2];
+    chfs_client::inum inum;
+    size_t len;
+  };
 
  private:
   static std::string filename(inum);
@@ -40,6 +45,7 @@ class chfs_client {
 
   bool isfile(inum);
   bool isdir(inum);
+  bool issymlink(inum);
 
   int getfile(inum, fileinfo &);
   int getdir(inum, dirinfo &);
@@ -54,6 +60,8 @@ class chfs_client {
   int mkdir(inum , const char *, mode_t , inum &);
   
   /** you may need to add symbolic link related methods here.*/
+  int symlink(inum parent, const char* name, const char* link, inum& ino_out);
+  int readlink(inum ino, std::string &data);
 };
 
 #endif 

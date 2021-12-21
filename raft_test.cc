@@ -14,6 +14,7 @@ TEST_CASE(part1, leader_election, "Initial election")
     
     // 1. check whether there is exact one leader in the group
     mssleep(300); // sleep 300 ms
+
     group->check_exact_one_leader();
 
     // 2. check whether every one has the same term
@@ -26,6 +27,7 @@ TEST_CASE(part1, leader_election, "Initial election")
 
     ASSERT(term1 == term2, "inconsistent term: " << term1 << ", " << term2);
     group->check_exact_one_leader();
+// ASSERT(0, "i'm here");
     delete group;
 }
 
@@ -88,11 +90,9 @@ TEST_CASE(part2, fail_agree, "Fail Agreement")
 
     int num_nodes = 3;
     list_raft_group* group = new list_raft_group(3);
-
     group->append_new_command(101, num_nodes);
     int leader = group->check_exact_one_leader();
     group->disable_node(leader);
-
     group->append_new_command(102, num_nodes - 1);
     group->append_new_command(103, num_nodes - 1);
     mssleep(1000);
@@ -100,11 +100,9 @@ TEST_CASE(part2, fail_agree, "Fail Agreement")
     group->append_new_command(105, num_nodes - 1);
 
     group->enable_node(leader);
-
     group->append_new_command(106, num_nodes);
     mssleep(1000);
     group->append_new_command(107, num_nodes);
-
     delete group;
 }
 
@@ -237,7 +235,7 @@ TEST_CASE(part2, rejoin, "Rejoin of partitioned leader")
 
     // leader network failure
     group->disable_node(leader1);
-
+    fprintf(stderr, "flag0.0\n");
     // make old leader try to agree on some entries
     int temp_term, temp_index;
     group->nodes[leader1]->new_command(list_command(102), temp_term, temp_index);
@@ -247,7 +245,7 @@ TEST_CASE(part2, rejoin, "Rejoin of partitioned leader")
     // new leader commits, also for index=2
     int leader2 = group->check_exact_one_leader();
     group->append_new_command(103, 2);
-
+    fprintf(stderr, "flag1.0\n");
     // new leader network failure
     group->disable_node(leader2);
 
@@ -255,12 +253,12 @@ TEST_CASE(part2, rejoin, "Rejoin of partitioned leader")
     group->enable_node(leader1);
 
     group->append_new_command(104, 2);
-
+    fprintf(stderr, "flag1.5\n");
 	// all together now
 	group->enable_node(leader2);
 
     group->append_new_command(105, num_nodes);
-
+    fprintf(stderr, "flag2.0\n");
     delete group;
 }
 
