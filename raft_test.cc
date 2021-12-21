@@ -722,24 +722,33 @@ void del_kv_pair(kv_raft_group* group, int k, bool succ)
 
 void check_kv_pair(kv_raft_group* group, int k, bool succ)
 {
-    int leader = group->check_exact_one_leader();
-    int term, index;
-    std::string ans_key = "k" + std::to_string(k);
-    std::string ans_val = "v" + std::to_string(k * 10);
-    kv_command cmd(kv_command::CMD_GET, ans_key, "");
-    ASSERT(group->nodes[leader]->new_command(cmd, term, index), "Leader should not change");
-    {
-        std::unique_lock<std::mutex> lock(cmd.res->mtx);
-        if (!cmd.res->done) {
-            ASSERT(cmd.res->cv.wait_until(lock, std::chrono::system_clock::now() + std::chrono::milliseconds(2500)) == std::cv_status::no_timeout,
-                "Get command timeout");
-        }  
-        ASSERT(cmd.res->succ == succ, "Get command fails " << cmd.res->succ << " vs " << succ);
-        if (succ) {
-            ASSERT(cmd.res->key == ans_key, "Wrong key");
-            ASSERT(cmd.res->value == ans_val, "Wrong value");
+    int total_tries = 5;
+    int tries = 0;
+    while (tries < total_tries) {
+        tries ++;
+        int leader = group->check_exact_one_leader();
+        int term, index;
+        std::string ans_key = "k" + std::to_string(k);
+        std::string ans_val = "v" + std::to_string(k * 10);
+        kv_command cmd(kv_command::CMD_GET, ans_key, "");
+        if (!group->nodes[leader]->new_command(cmd, term, index)) goto next_try;
+        {
+            std::unique_lock<std::mutex> lock(cmd.res->mtx);
+            if (!cmd.res->done) {
+                if(cmd.res->cv.wait_until(lock, std::chrono::system_clock::now() + std::chrono::milliseconds(2500)) == std::cv_status::timeout)
+                    goto next_try;
+            }  
+            ASSERT(cmd.res->succ == succ, "Get command fails " << cmd.res->succ << " vs " << succ);
+            if (succ) {
+                ASSERT(cmd.res->key == ans_key, "Wrong key");
+                ASSERT(cmd.res->value == ans_val, "Wrong value");
+            }
         }
+        return;
+        next_try:
+            mssleep(200);
     }
+    ASSERT(false, "Cannot read key-value pair");
 }
 
 TEST_CASE(part5, basic_kv, "Basic key-value store")
@@ -808,6 +817,7 @@ TEST_CASE(part5, persist_kv, "Persist key-value store")
         group->disable_node(i);
         group->restart(i);
     }
+    mssleep(2000); // wait for election
     for (int i = 1; i < 10; i++)
         check_kv_pair(group, i, true);
     check_kv_pair(group, 0, false);
@@ -830,6 +840,7 @@ TEST_CASE(part5, snapshot_kv, "Persist key-value snapshot")
     ASSERT(group->nodes[other_node]->save_snapshot(), "follower cannot save snapshot");
     mssleep(2000);
     group->enable_node(killed_node);
+    mssleep(2000); // wait for the election
     leader = group->check_exact_one_leader();
     for (int i = 0; i < 50; i++)
         check_kv_pair(group, i, true);
