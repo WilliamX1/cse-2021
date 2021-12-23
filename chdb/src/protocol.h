@@ -42,16 +42,31 @@ namespace chdb_protocol {
     class prepare_var {
     public:
         int tx_id;
+
+        std::map<int, int> write_map_;
+
+        prepare_var() {};
+        prepare_var(int tx_id, std::map<int, int> write_map_)
+        : tx_id(tx_id), write_map_(write_map_) {};
     };
 
     class check_prepare_state_var {
     public:
         int tx_id;
+
+        check_prepare_state_var() {};
+        check_prepare_state_var(int tx_id) : tx_id(tx_id) {};
     };
 
     class commit_var {
     public:
         int tx_id;
+
+        std::map<int, int> write_map_;
+
+        commit_var() {};
+        commit_var(int tx_id, std::map<int, int> write_map_)
+        : tx_id(tx_id), write_map_(write_map_) {};
     };
 
     class rollback_var {

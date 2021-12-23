@@ -275,7 +275,6 @@ TEST_CASE(part2, raft_view_server, "Test simple view server raft group") {
     // fetch a ref of raft group
     auto group = store.vserver->raft_group;
     int leader1 = group->check_exact_one_leader();
-
     {
         tx_region db_client(&store);
         // dummy request

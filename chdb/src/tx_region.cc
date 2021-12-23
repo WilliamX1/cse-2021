@@ -3,46 +3,82 @@
 
 int tx_region::put(const int key, const int val) {
     // TODO: Your code here
+
     printf("tx[%d] put <key, value> = <%d, %d>\n", tx_id, key, val);
-    cache_[key] = val;
+    int shard_client_id = this->db->dispatch(key, (int) this->db->shards.size());
+
+    /* Store the first value into write_map_ */
+    if (this->cache_map_[shard_client_id].find(key) == this->cache_map_[shard_client_id].end())
+        this->write_map_[shard_client_id][key] = get(key);
+    
+    this->cache_map_[shard_client_id][key] = val;
+
     return 0;
 }
 
 int tx_region::get(const int key) {
     // TODO: Your code here
-    int val = 0;
-    if (cache_.find(key) == cache_.end()) {
-        int target_shard_client_id = this->db->dispatch(key, (int) this->db->shards.size());
+
+    printf("tx[%d] get <key, value> = <%d, ?>\n", tx_id, key);
+
+    int ret = 0;
+
+    int shard_client_id = this->db->dispatch(key, (int) this->db->shards.size());
+    if (this->cache_map_[shard_client_id].find(key) == this->cache_map_[shard_client_id].end()) {
         chdb_protocol::operation_var var(this->tx_id, key);
-        int state = this->db->shard_id2shard(target_shard_client_id)->get(var, val);
-        printf("tx[%d] get <key, value> = <%d, %d> ~ from shard_client[%d]\n", tx_id, key, val, target_shard_client_id);
+
+        shard_client* shard = this->db->shard_id2shard(shard_client_id);
+
+        shard->node->call(shard->node->bind_remote_node(shard->node->port()), chdb_protocol::Get, var, ret);
+        
+        printf("tx[%d] get <key, value> = <%d, %d> ~ from shard_client[%d]\n", tx_id, key, ret, shard_client_id);
     } else {
-        val = cache_[key];
-        printf("tx[%d] get <key, value> = <%d, %d> ~ from tx_region cache\n", tx_id, key, val);
+        ret = this->cache_map_[shard_client_id][key];
+        printf("tx[%d] get <key, value> = <%d, %d> ~ from tx_region cache\n", tx_id, key, ret);
     }
-    return val;
+    
+    return ret;
 }
 
 int tx_region::tx_can_commit() {
     // TODO: Your code here
+
     int ret = chdb_protocol::prepare_ok;
 
     /* Check if every shard is OK */
-    std::map<int, int>::iterator iter = cache_.begin();
-    while (iter != cache_.end()) {
-        int key = iter->first;
-        int target_shard_client_id = this->db->dispatch(key, (int) this->db->shards.size());
+    std::map<int, std::map<int, int> >::iterator shard_iter = this->write_map_.begin();
 
-        if (this->db->shard_id2shard(target_shard_client_id)->active == false) {
+    while (shard_iter != this->write_map_.end()) {
+        int shard_client_id = shard_iter->first;
+        std::map<int, int> write_set = shard_iter->second;
+
+        chdb_protocol::prepare_var prepare_var(this->tx_id, write_set);
+        int r;
+
+        shard_client* shard = this->db->shard_id2shard(shard_client_id);
+        shard->node->call(shard->node->bind_remote_node(shard->node->port()), chdb_protocol::Prepare, prepare_var, r);
+
+        if (r == chdb_protocol::prepare_not_ok) {
             ret = chdb_protocol::prepare_not_ok;
             break;
         };
 
-        iter++;
-    }
+        chdb_protocol::check_prepare_state_var check_prepare_state_var(this->tx_id);
+        shard->node->call(shard->node->bind_remote_node(shard->node->port()), chdb_protocol::CheckPrepareState, check_prepare_state_var, r);
+
+        if (r == chdb_protocol::prepare_not_ok) {
+            ret = chdb_protocol::prepare_not_ok;
+            break;
+        };
+
+        shard_iter++;
+    };
+
+    /* Output can commit or not to screen */
     std::string is_ok = ret == chdb_protocol::prepare_ok ? "Yes" : "No";
 
     printf("tx[%d] can commit ? %s\n", tx_id, is_ok.c_str());
+
     return ret;
 }
 
@@ -54,20 +90,23 @@ int tx_region::tx_begin() {
 
 int tx_region::tx_commit() {
     // TODO: Your code here
-    printf("tx[%d] commit\n", tx_id);
-    
-    std::map<int, int>::iterator iter = cache_.begin();
-    int key, val;
-    while (iter != cache_.end()) {
-        key = iter->first; val = iter->second;
-        int target_shard_client_id = this->db->dispatch(key, (int) this->db->shards.size());
-        chdb_protocol::operation_var var(this->tx_id, key, val);
-        int r = 0;
-        int state = this->db->shard_id2shard(target_shard_client_id)->put(var, r);
-        printf("tx[%d] commit <key, value> = <%d, %d> ~ to shard_client[%d]\n", tx_id, key, val, target_shard_client_id);
 
-        iter++;
-    };
+    printf("tx[%d] commit\n", tx_id);
+
+    std::map<int, std::map<int, int> >::iterator shard_iter = this->cache_map_.begin();
+
+    while (shard_iter != this->cache_map_.end()) {
+        int shard_client_id = shard_iter->first;
+        std::map<int, int> write_set = shard_iter->second;
+
+        chdb_protocol::commit_var var(this->tx_id, write_set);
+        
+        int r;
+        shard_client* shard = this->db->shard_id2shard(shard_client_id);
+        shard->node->call(shard->node->bind_remote_node(shard->node->port()), chdb_protocol::Commit, var, r);
+
+        shard_iter++;
+    }
 
     return 0;
 }

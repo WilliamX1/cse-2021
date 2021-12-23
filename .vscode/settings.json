@@ -74,6 +74,7 @@
         "typeinfo": "cpp",
         "__memory": "c",
         "filesystem": "c",
-        "raft_protocol.h": "c"
+        "raft_protocol.h": "c",
+        "random": "c"
     }
 }

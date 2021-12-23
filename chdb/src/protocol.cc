@@ -34,12 +34,14 @@ namespace chdb_protocol {
     marshall &
     operator<<(marshall &m, const prepare_var &var) {
         m << var.tx_id;
+        m << var.write_map_;        
         return m;
     }
 
     unmarshall &
     operator>>(unmarshall &u, prepare_var &var) {
         u >> var.tx_id;
+        u >> var.write_map_;
         return u;
     }
 
@@ -58,12 +60,14 @@ namespace chdb_protocol {
     marshall &
     operator<<(marshall &m, const commit_var &var) {
         m << var.tx_id;
+        m << var.write_map_;
         return m;
     }
 
     unmarshall &
     operator>>(unmarshall &u, commit_var &var) {
         u >> var.tx_id;
+        u >> var.write_map_;
         return u;
     }
 

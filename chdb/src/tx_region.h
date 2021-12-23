@@ -1,6 +1,7 @@
 #include "ch_db.h"
 #include <map>
 #include <mutex>
+#include <set>
 
 /*
  * tx_region: chdb KV client which supports transaction concurrency control.
@@ -9,10 +10,9 @@ class tx_region {
 public:
     tx_region(chdb *db) : db(db),
                           tx_id(db->next_tx_id()) {
-        this->tx_begin();
-
         mtx.lock();
-
+        
+        this->tx_begin();
     }
 
     ~tx_region() {
@@ -57,8 +57,18 @@ public:
      * Transaction part
      * ********************************************/
 private:
-    /* Used to cache key-value */
-    std::map< int, int > cache_;
+    /* Used to cache key-value.
+     * First, translate key into shard_client_id.
+     * Second, use this shard_client_id as the outer layer 'key' to get corresponding map.
+     * Final, store key-value into this map.
+     */
+    std::map<int, std::map< int, int > > cache_map_;
+
+    /* Used to store the first old value in original shard_clients.
+     * For every 'put' request, if cache has its val, then do nothing.
+     * else, post a 'get' rpc_request to shard_client to get its first old value.
+     */
+    std::map<int, std::map< int, int > > write_map_;
     /* Big lock to pass test3 */
     std::mutex mtx;
 
