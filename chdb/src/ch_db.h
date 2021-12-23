@@ -18,6 +18,7 @@ public:
     shard_dispatch dispatch;            /* Dispatch requests to the target shard */
     chdb_raft_group *raft_group;
 
+    /* Raft Nodes Number May Matters a lot */
     view_server(const int base_port,
                 shard_dispatch dispatch,
                 const int num_raft_nodes = 4) :
@@ -62,6 +63,29 @@ public:
             const chdb_protocol::operation_var &var,
             int &r);
 
+    int
+    execute(unsigned int shard_client_id,
+            unsigned int proc,
+            const chdb_protocol::prepare_var &var,
+            int &r);
+
+    int
+    execute(unsigned int shard_client_id,
+            unsigned int proc,
+            const chdb_protocol::check_prepare_state_var &var,
+            int &r);
+
+    int
+    execute(unsigned int shard_client_id,
+            unsigned int proc,
+            const chdb_protocol::commit_var &var,
+            int &r);
+
+    int
+    execute(unsigned int query_key,
+            unsigned int proc,
+            const chdb_protocol::rollback_var &var,
+            int &r);
 
     ~view_server();
 

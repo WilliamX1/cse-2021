@@ -10,7 +10,8 @@ class tx_region {
 public:
     tx_region(chdb *db) : db(db),
                           tx_id(db->next_tx_id()) {
-        mtx.lock();
+        // mtx.lock();
+        this->db->tx_id_mtx.lock();
         
         this->tx_begin();
     }
@@ -19,7 +20,8 @@ public:
         if (this->tx_can_commit() == chdb_protocol::prepare_ok) this->tx_commit();
         else this->tx_abort();
 
-        mtx.unlock();
+        // mtx.unlock();
+        this->db->tx_id_mtx.unlock();
     }
 
     /**
@@ -69,8 +71,6 @@ private:
      * else, post a 'get' rpc_request to shard_client to get its first old value.
      */
     std::map<int, std::map< int, int > > write_map_;
-    /* Big lock to pass test3 */
-    std::mutex mtx;
 
     /**
      * Transaction begin
@@ -89,4 +89,7 @@ private:
 
     chdb *db;
     const int tx_id;
+
+    /* Big lock to pass test3 */
+    std::mutex mtx;
 };

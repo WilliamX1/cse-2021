@@ -23,14 +23,20 @@ int tx_region::get(const int key) {
 
     int ret = 0;
 
-    int shard_client_id = this->db->dispatch(key, (int) this->db->shards.size());
+    // Sync Version:
+    // int shard_client_id = this->db->dispatch(key, (int) this->db->shards.size());
+    // Async Version:
+    int shard_client_id = this->db->vserver->dispatch(key, (int) this->db->vserver->shard_num());
+
     if (this->cache_map_[shard_client_id].find(key) == this->cache_map_[shard_client_id].end()) {
         chdb_protocol::operation_var var(this->tx_id, key);
 
-        shard_client* shard = this->db->shard_id2shard(shard_client_id);
+        // Sync Version:
+        // shard_client* shard = this->db->shard_id2shard(shard_client_id);
+        // shard->node->call(shard->node->bind_remote_node(shard->node->port()), chdb_protocol::Get, var, ret);
+        // Async Version:
+        this->db->vserver->execute(key, chdb_protocol::Get, var, ret);
 
-        shard->node->call(shard->node->bind_remote_node(shard->node->port()), chdb_protocol::Get, var, ret);
-        
         printf("tx[%d] get <key, value> = <%d, %d> ~ from shard_client[%d]\n", tx_id, key, ret, shard_client_id);
     } else {
         ret = this->cache_map_[shard_client_id][key];
@@ -55,8 +61,11 @@ int tx_region::tx_can_commit() {
         chdb_protocol::prepare_var prepare_var(this->tx_id, write_set);
         int r;
 
-        shard_client* shard = this->db->shard_id2shard(shard_client_id);
-        shard->node->call(shard->node->bind_remote_node(shard->node->port()), chdb_protocol::Prepare, prepare_var, r);
+        // Sync Version:
+        // shard_client* shard = this->db->shard_id2shard(shard_client_id);
+        // shard->node->call(shard->node->bind_remote_node(shard->node->port()), chdb_protocol::Prepare, prepare_var, r);
+        // Async Version
+        this->db->vserver->execute(shard_client_id, chdb_protocol::Prepare, prepare_var, r);
 
         if (r == chdb_protocol::prepare_not_ok) {
             ret = chdb_protocol::prepare_not_ok;
@@ -64,7 +73,11 @@ int tx_region::tx_can_commit() {
         };
 
         chdb_protocol::check_prepare_state_var check_prepare_state_var(this->tx_id);
-        shard->node->call(shard->node->bind_remote_node(shard->node->port()), chdb_protocol::CheckPrepareState, check_prepare_state_var, r);
+        
+        // Sync Version:
+        // shard->node->call(shard->node->bind_remote_node(shard->node->port()), chdb_protocol::CheckPrepareState, check_prepare_state_var, r);
+        // Async Version:
+        this->db->vserver->execute(shard_client_id, chdb_protocol::CheckPrepareState, check_prepare_state_var, r);
 
         if (r == chdb_protocol::prepare_not_ok) {
             ret = chdb_protocol::prepare_not_ok;
@@ -102,8 +115,12 @@ int tx_region::tx_commit() {
         chdb_protocol::commit_var var(this->tx_id, write_set);
         
         int r;
-        shard_client* shard = this->db->shard_id2shard(shard_client_id);
-        shard->node->call(shard->node->bind_remote_node(shard->node->port()), chdb_protocol::Commit, var, r);
+
+        // Sync Version:
+        // shard_client* shard = this->db->shard_id2shard(shard_client_id);
+        // shard->node->call(shard->node->bind_remote_node(shard->node->port()), chdb_protocol::Commit, var, r);
+        // Async Version:
+        this->db->vserver->execute(shard_client_id, chdb_protocol::Commit, var, r);
 
         shard_iter++;
     }

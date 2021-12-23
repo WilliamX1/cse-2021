@@ -9,7 +9,7 @@ int shard_client::put(chdb_protocol::operation_var var, int &r) {
 
     value_entry val(var.value);    
     for (int i = 0; i < (int) store.size(); i++)
-        store[i][var.key] = val;
+        store[i][var.key] = val;  
     mtx.unlock();
     return 0;
 }
@@ -44,6 +44,7 @@ int shard_client::commit(chdb_protocol::commit_var var, int &r) {
         key = iter->first; value = iter->second;
         // printf("\t");
         // put(chdb_protocol::operation_var(var.tx_id, key, val), r);
+        printf("\tshard_client[%d] commit <key, val> = <%d, %d>\n", this->shard_id, key, value);
         value_entry val(value);    
         for (int i = 0; i < (int) store.size(); i++)
             store[i][key] = val;
@@ -64,9 +65,14 @@ int shard_client::rollback(chdb_protocol::rollback_var var, int &r) {
 
 int shard_client::check_prepare_state(chdb_protocol::check_prepare_state_var var, int &r) {
     // TODO: Your code here
+    
+    mtx.lock();
+
     /* Return current active directly */
     printf("WARNING: Do Not Understand This Method\n");
     r = this->active;
+
+    mtx.unlock();
     return 0;
 }
 
