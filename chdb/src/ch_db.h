@@ -21,7 +21,7 @@ public:
     /* Raft Nodes Number May Matters a lot */
     view_server(const int base_port,
                 shard_dispatch dispatch,
-                const int num_raft_nodes = 4) :
+                const int num_raft_nodes = 3) :
             dispatch(dispatch),
             node(new rpc_node(base_port)) {
 #if RAFT_GROUP

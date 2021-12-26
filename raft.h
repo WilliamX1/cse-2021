@@ -531,7 +531,7 @@ void raft<state_machine, command>::run_background_election() {
 
             std::random_device dev;
             std::mt19937 rng(dev());
-            std::uniform_real_distribution<double> d(0.3, 0.5);
+            std::uniform_real_distribution<double> d(0.2, 0.3);
             double time_out_num = d(rng);
 
             if (role == follower) {
@@ -548,7 +548,7 @@ void raft<state_machine, command>::run_background_election() {
                 }
             }
             else if (role == candidate) {
-                double timeout = 1;
+                double timeout = 0.6;
                 double delta_time = (double)(clock() - last_response_time) / CLOCKS_PER_SEC;
                 
                 if (delta_time > timeout) {
