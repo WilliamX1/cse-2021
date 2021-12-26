@@ -75,6 +75,7 @@ class tcpsconn {
 		~tcpsconn();
 
 		void accept_conn();
+		int port();
 	private:
 
 		pthread_mutex_t m_;

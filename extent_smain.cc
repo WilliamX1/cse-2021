@@ -1,5 +1,6 @@
 #include "rpc.h"
 #include <arpa/inet.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include "extent_server.h"
@@ -30,6 +31,7 @@ main(int argc, char *argv[])
   server.reg(extent_protocol::getattr, &ls, &extent_server::getattr);
   server.reg(extent_protocol::put, &ls, &extent_server::put);
   server.reg(extent_protocol::remove, &ls, &extent_server::remove);
+  server.reg(extent_protocol::create, &ls, &extent_server::create);
 
   while(1)
     sleep(1000);
