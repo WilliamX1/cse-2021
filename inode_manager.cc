@@ -31,6 +31,9 @@ disk::print_status(uint32_t id)
 // block layer -----------------------------------------
 
 // Allocate a free disk block.
+/* 从 FILEBLOCK 开始向后查找，用 'using_blocks[]' 数组记录已经分配的 block 区域。
+ * 直到查找到一个还未分配的 block 区域进行使用。
+ */
 blockid_t
 block_manager::alloc_block()
 {
@@ -48,6 +51,7 @@ block_manager::alloc_block()
   return 0;
 }
 
+/* 将对应的 block 置为 '未分配' 状态，直接给 using_blocks[]' 赋值即可。 */
 void
 block_manager::free_block(uint32_t id)
 {
@@ -121,9 +125,9 @@ inode_manager::alloc_inode(uint32_t type)
 
   printf("\tim: alloc_inode %d\n", type);
   for(int i = 0; i < INODE_NUM; i++){
-    inum = (inum + 1) % INODE_NUM;
+    inum = (inum + 1) % INODE_NUM; /* 防止超出范围 */
     inode_t *ino = get_inode(inum);
-    if(!ino){
+    if(!ino){ /* 该 inode 未分配则直接分配即可 */
       ino = (inode_t *)malloc(sizeof(inode_t));
       bzero(ino, sizeof(inode_t));
       ino->type = type;
@@ -134,7 +138,7 @@ inode_manager::alloc_inode(uint32_t type)
       free(ino);
       break;
     }
-    free(ino);
+    free(ino); /* 释放指针空间防止内存泄漏 */
   }
 
   assert(inum != 0);
@@ -152,7 +156,7 @@ inode_manager::free_inode(uint32_t inum)
   printf("\tim: free_inode %d\n", inum);
   inode_t *ino = get_inode(inum);
   if(ino){
-    assert(ino->type != 0);
+    assert(ino->type != 0); /* 检查该 inode 状态，防止二次释放空间 */
     ino->type = 0;
     
     put_inode(inum, ino);
@@ -200,6 +204,7 @@ inode_manager::put_inode(uint32_t inum, struct inode *ino)
   printf("\tim: put_inode %d\n", inum);
   assert(ino);
 
+  /* 将 inode */
   bm->read_block(IBLOCK(inum, bm->sb.nblocks), buf);
   ino_disk = (struct inode*)buf + inum%IPB;
   *ino_disk = *ino;
@@ -214,15 +219,15 @@ inode_manager::get_nth_blockid(inode_t *ino, uint32_t n)
 
   assert(ino);
   printf("\tim: get_nth_blockid %d\n", n);
-  if(n < NDIRECT)
+  if (n < NDIRECT)
     res = ino->blocks[n];
-  else if(n < MAXFILE){
-    if(!ino->blocks[NDIRECT])
+  else if (n < MAXFILE){
+    if (!ino->blocks[NDIRECT])
       printf("\tim: get_nth_blockid none NINDIRECT!\n");
     bm->read_block(ino->blocks[NDIRECT], buf);      
     
     res = ((blockid_t *)buf)[n - NDIRECT];
-  }else{
+  } else{
     printf("\tim: get_nth_blockid out of range\n");
     exit(0);
   }
