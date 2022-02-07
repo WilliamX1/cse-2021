@@ -7,7 +7,7 @@
 ## 目录
 
 - [目录](#目录)
-- [Lab1: Basic File System](#Lab-1-Basic-File-System)
+- [Lab 1: Basic File System](#Lab-1-Basic-File-System)
 - [Lab 2: Word Count with MapReduce](#Lab-2-Word-Count-with-MapReduce)
 - [Lab 3: Fault-tolerant Key-Value Store with Raft](#Lab-3-Fault-tolerant-Key-Value-Store-with-Raft)
 - [Lab 4: Shard Transactional KVS Service](#Lab-4-Shard-Transactional-KVS-Service)
